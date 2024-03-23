@@ -1,6 +1,4 @@
-#include <winsock2.h>
 #include <ws2tcpip.h>
-#include <stdio.h>
 #include "Globals.h"
 #include "NetworkClient.h"
 
@@ -10,7 +8,7 @@ SOCKET g_persistentSocket = INVALID_SOCKET; // Global persistent socket
 bool initializeWinsock() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        if (DEBUG) printf("Failed to initialize Winsock.\n");
+        printf("Failed to initialize Winsock.\n");
         return false;
     }
     return true;

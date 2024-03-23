@@ -1,15 +1,10 @@
-#include <winsock2.h>
 #include <ws2tcpip.h>
-#include <stdio.h>
 #include <thread>
 #include "Globals.h"
 #include "NetworkServer.h"
 
 std::atomic<bool> serverRunning;
 SOCKET g_listenSocket = INVALID_SOCKET;
-
-HWND hEdit; // Declare hEdit globally
-void AppendTextToConsole(HWND hEdit, const wchar_t* text);
 
 std::wstring getServerIPAddress() {
     wchar_t hostname[NI_MAXHOST] = L"";
@@ -122,28 +117,53 @@ void handleClient(SOCKET clientSocket) {
     while (serverRunning) {
         ZeroMemory(buffer, sizeof(buffer));
         if (!receiveData(clientSocket, buffer, sizeof(buffer))) {
-            if (DEBUG) printf("Error receiving data or client disconnected.\n");
+            printf("Error receiving data or client disconnected.\n");
             break;
         }
 
-        if (DEBUG) printf("Received data: %s\n", buffer);
-        AppendTextToConsole(hEdit, L"Server initialized successfully!\n");
+        printf("Received data: %s\n", buffer);
+        // PostUpdateToUI(L"Server message to display in the edit control.");
+        AppendTextToConsole(hEdit, L"Client connected.");
 
         char ack = 1; // Send an acknowledgment back to the client
         sendData(clientSocket, &ack, sizeof(ack));
     }
     closesocket(clientSocket); // Close the client socket
-    if (DEBUG) printf("Client socket closed.\n");
+    printf("Client socket closed.\n");
 }
 
 void startServer() {
     serverRunning = true;
+
+    // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
     while (serverRunning) {
-        SOCKET clientSocket = accept(g_listenSocket, NULL, NULL);
+
+        // Get the IP Address of the connecting client
+        sockaddr_in clientAddr; // Declare the structure to store client address
+        int clientAddrLen = sizeof(clientAddr); // Length of client address
+
+        // SOCKET clientSocket = accept(g_listenSocket, NULL, NULL);
+        SOCKET clientSocket = accept(g_listenSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
+
         if (clientSocket == INVALID_SOCKET) {
-            if (DEBUG) printf("Failed to accept connection.\n");
+            printf("Failed to accept connection.\n");
             continue; // Continue to accept the next connection
         }
+
+        // Use inet_ntop correctly
+        char clientIPStr[INET_ADDRSTRLEN]; // Buffer where the IP string will be stored
+        if (inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIPStr, INET_ADDRSTRLEN) == NULL) {
+            printf("Failed to convert IP address.\n");
+            continue;
+        }
+
+        std::string ipStr(clientIPStr); // Convert char* to std::string
+        std::wstring wideIP(ipStr.begin(), ipStr.end()); // Convert std::string to std::wstring for UI
+
+        std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\n";
+
+        // PostUpdateToUI(formattedMessage.c_str());
+        AppendTextToConsole(hEdit, formattedMessage.c_str());
 
         std::thread serverThread(handleClient, clientSocket);
         serverThread.detach(); // Detach the thread to handle the client independently

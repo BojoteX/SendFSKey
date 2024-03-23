@@ -1,23 +1,15 @@
-#include <windows.h>
-#include <iostream>
-#include <fstream>
-#include <stdio.h>
 #include <thread>
-#include <string>
-#include <shlwapi.h>
+#include "utilities.h"
 #include "Globals.h"
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 #include "Resource.h"
 
-#pragma comment(lib, "shlwapi.lib")
-
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-// Debug Mode
-bool DEBUG = 1; // Debug console
+HWND hEdit = NULL; // Handle to your edit control
 
 // Operation mode
 bool isClientMode;
@@ -28,74 +20,9 @@ MSG msg = { 0 };
 WNDCLASS wc = { 0 };
 WNDCLASS ws = { 0 };
 
-// Settings
-std::wstring mode;
-std::wstring serverIP;
-int port = 8028;
-
 // Initialize windowName and className
 wchar_t const* windowName;
 wchar_t const* className;
-
-std::wofstream logFile;
-
-void OpenLogFile() {
-    logFile.open("SendFSKey.log", std::wofstream::out | std::wofstream::app); // Open for writing in append mode
-    if (!logFile.is_open()) {
-        std::wcerr << L"Failed to open log file." << std::endl;
-    }
-}
-
-void Log(const std::wstring& message) {
-    if (logFile.is_open()) {
-        logFile << message << std::endl;
-        // For immediate writing, you can flush after each log entry
-        logFile.flush();
-    }
-}
-
-void CloseLogFile() {
-    if (logFile.is_open()) {
-        logFile.close();
-    }
-}
-
-// Function to check if the INI file exists
-bool IniFileExists(const std::string& filename) {
-    std::ifstream ifile(filename.c_str());
-    return ifile.good();
-}
-
-// Utility function to get the directory of the current executable
-std::wstring GetExecutableDir() {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH); // Get the full executable path
-    PathRemoveFileSpecW(path); // Remove the executable name, leaving the directory path
-    return std::wstring(path);
-}
-
-void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
-    std::wstring iniPath = GetExecutableDir() + L"\\SendFSKey.ini"; // Build the full INI file path
-
-    WritePrivateProfileStringW(L"Settings", L"Mode", mode.c_str(), iniPath.c_str());
-    if (mode == L"Client") {
-        WritePrivateProfileStringW(L"Settings", L"IP", ip.c_str(), iniPath.c_str());
-    }
-    WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str());
-}
-
-void AppendTextToConsole(HWND hEdit, const wchar_t* text) {
-    // Calculate the new end of the text buffer so we can set the selection
-    // to the end of the text and ensure the newly appended text is visible.
-    int idxEnd = GetWindowTextLength(hEdit);
-    SendMessage(hEdit, EM_SETSEL, (WPARAM)idxEnd, (LPARAM)idxEnd);
-
-    // Append the text by replacing the current selection (which is nothing at the end of the text)
-    SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)text);
-
-    // Scroll to the end of the text
-    SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
-}
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -156,12 +83,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit if Winsock initialization fails
     }
 
-    if (DEBUG) {
-        AllocConsole();
-        freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-        freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
-    }
-
+  
+    AllocConsole();
+    freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+    freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
+  
     if (isClientMode) {
         SetConsoleTitleW(L"SendFSKey Client");
         // Establish connection at startup for client mode
@@ -200,16 +126,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             return -1;  // This return should happen regardless of the DEBUG flag's state
         }
 
-        std::wstring serverIP = getServerIPAddress();
-        printf("SendFSKey v1.0\n");
-        printf("Copyright(c) 2024 by Jesus \"Bojote\" Altuve\n");
-        printf("\n");
-        printf("Server started succesfully on IP Address %ls using port %d\n", serverIP.c_str(), port);
-        printf("Ready to accept connections. Run SendFSKey on remote computer in client mode\n");
-
-        std::thread clientThread(startServer);
-        clientThread.detach(); // Detach the thread to handle the client independently
-
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey (Server Mode)";
         wchar_t const* className = L"BojoteApp";
@@ -222,8 +138,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (!RegisterClass(&ws)) return -1;
 
-        HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, NULL, NULL, hInstance, NULL);
-        HWND hEdit;
+        HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 800, 200, NULL, NULL, hInstance, NULL);
         if (hWndServer) {
             hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndServer, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
             if (hEdit) {
@@ -246,6 +161,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         else {
             // Handle window creation failure
         }
+
+        std::wstring serverIP = getServerIPAddress();
+        printf("SendFSKey v1.0\n");
+        printf("Copyright(c) 2024 by Jesus \"Bojote\" Altuve\n");
+        printf("\n");
+        printf("Server started succesfully on IP Address %ls using port %d\n", serverIP.c_str(), port);
+        printf("Ready to accept connections. Run SendFSKey on remote computer in client mode\n");
+
+        // Just before starting the UI look we spawnn our thread and detach it
+        std::thread ServerThread(startServer);
+        ServerThread.detach(); // Detach the thread to handle the client independently
 
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
@@ -324,20 +250,21 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (isClientMode) {
             // Send key press in client mode
             sendKeyPress(static_cast<UINT>(wp));
-            if (DEBUG) {
+
+
                 wchar_t charCode = toupper(static_cast<wchar_t>(wp));
                 wprintf(L"Key Down: %c ", charCode);
                 printf("(%llu)\n", static_cast<unsigned long long>(wp));
-            }
+
         }
         break;
     case WM_KEYUP:
         if (isClientMode) {
-            if (DEBUG) {
+
                 wchar_t charCode = toupper(static_cast<wchar_t>(wp));
                 wprintf(L"Key Up: %c ", charCode);
                 printf("(%llu)\n", static_cast<unsigned long long>(wp));
-            }
+
         }
         break;
     case WM_DESTROY:

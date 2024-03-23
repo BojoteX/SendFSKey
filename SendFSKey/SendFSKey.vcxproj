@@ -138,6 +138,7 @@
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SendFSKey.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="utilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetworkClient.cpp" />
