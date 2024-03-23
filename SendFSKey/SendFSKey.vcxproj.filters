@@ -27,16 +27,16 @@
     <ClInclude Include="SendFSKey.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="utilities.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Globals.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NetworkClient.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NetworkServer.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="utilities.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -48,6 +48,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="NetworkServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SendInput.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

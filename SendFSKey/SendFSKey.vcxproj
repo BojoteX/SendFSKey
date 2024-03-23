@@ -144,6 +144,7 @@
     <ClCompile Include="NetworkClient.cpp" />
     <ClCompile Include="NetworkServer.cpp" />
     <ClCompile Include="SendFSKey.cpp" />
+    <ClCompile Include="SendInput.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="SendFSKey.rc" />

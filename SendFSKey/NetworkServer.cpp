@@ -1,5 +1,6 @@
 #include <ws2tcpip.h>
 #include <thread>
+#include <stdexcept>
 #include "Globals.h"
 #include "NetworkServer.h"
 
@@ -112,7 +113,144 @@ void cleanupServer() {
     shutdownServer(); // Ensure the server is properly shut down
 }
 
+#include <Windows.h>
+#include <cstdio> // For printf
+
 void handleClient(SOCKET clientSocket) {
+    // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 4 bytes for keyCode
+    unsigned char buffer[5];
+    while (serverRunning) {
+        ZeroMemory(buffer, sizeof(buffer));
+        // Assuming receiveData is properly defined elsewhere to wrap recv() and return true if data was received
+        int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0);
+        if (bytesReceived <= 0) {
+            printf("Error receiving data or client disconnected.\n");
+            break; // Exit loop on error or disconnection
+        }
+
+        // First byte is the event type
+        char eventType = buffer[0];
+
+        // Next 4 bytes are the keyCode, ensure proper alignment and endianness
+        UINT keyCode;
+        memcpy(&keyCode, buffer + 1, sizeof(keyCode));
+
+        switch (eventType) {
+        case 'D':
+            printf("Key Down: %u\n", keyCode);
+            SendKeyPressDOWN(keyCode);
+            break;
+        case 'U':
+            printf("Key Up: %u\n", keyCode);
+            SendKeyPressUP(keyCode);
+            break;
+        default:
+            printf("Unknown event type: %c\n", eventType);
+            break; // Optionally, handle unknown event type
+        }
+
+        // Send acknowledgment back to the client
+        char ack = 1;
+        send(clientSocket, &ack, sizeof(ack), 0);
+    }
+    printf("Client socket closed.\n");
+    closesocket(clientSocket); // Clean up the socket
+}
+
+void handleClientOLDOLD(SOCKET clientSocket) {
+    char buffer[1024];
+    while (serverRunning) {
+        ZeroMemory(buffer, sizeof(buffer));
+        if (!receiveData(clientSocket, buffer, sizeof(buffer))) {
+            printf("Error receiving data or client disconnected.\n");
+            continue; // Keep the server running even in case of error
+        }
+
+        // Ensure the buffer contains at least 2 characters (1 for event type, 1 for keyCode)
+        if (strlen(buffer) < 2) {
+            printf("Received data is too short or incorrect format.\n");
+            // Optionally, send an error message back to client
+            continue; // Skip to the next iteration of the loop without closing the socket
+        }
+
+        char eventType = buffer[0];
+        // Attempt to convert the remaining part of the buffer to an integer
+        int keyCode;
+        try {
+            keyCode = std::stoi(buffer + 1);
+        }
+        catch (const std::invalid_argument& ia) {
+            printf("Invalid key code received: %s\n", ia.what());
+            continue;
+        }
+        catch (const std::out_of_range& oor) {
+            printf("Key code out of range: %s\n", oor.what());
+            continue;
+        }
+
+        switch (eventType) {
+        case 'D':
+            printf("Key Down: %d\n", keyCode);
+            SendKeyPressDOWN(keyCode);
+            break;
+        case 'U':
+            printf("Key Up: %d\n", keyCode);
+            SendKeyPressUP(keyCode);
+            break;
+        default:
+            printf("Unknown event type: %c\n", eventType);
+            // Handle unknown event type, if necessary
+            break;
+        }
+
+        // Acknowledge the received message
+        char ack = 1;
+        sendData(clientSocket, &ack, sizeof(ack));
+    }
+    // Move the socket closure outside of the while loop
+    printf("Client socket closed.\n");
+    closesocket(clientSocket); // Ensure socket is closed when the server is no longer running
+}
+
+void handleClientNEW(SOCKET clientSocket) {
+    char buffer[1024];
+    while (serverRunning) {
+        ZeroMemory(buffer, sizeof(buffer));
+        // Assume receiveData is a wrapper around recv() that returns true if data was received
+        if (!receiveData(clientSocket, buffer, sizeof(buffer))) {
+            printf("Error receiving data or client disconnected.\n");
+            break; // Exit the loop if there's an error or disconnection
+        }
+
+        // First character of the buffer is the event type: 'D' for key down, 'U' for key up
+        char eventType = buffer[0];
+
+        // The rest of the buffer is the key code
+        // Convert the key code part of the buffer to an integer
+        int keyCode = atoi(buffer + 1); // Skip the first character when converting
+
+        if (eventType == 'D') {
+            printf("Key Down: %d\n", keyCode);
+            SendKeyPressDOWN(keyCode);
+        }
+        else if (eventType == 'U') {
+            printf("Key Up: %d\n", keyCode);
+            SendKeyPressUP(keyCode);
+        }
+        else {
+            printf("Unknown event type: %c\n", eventType);
+            // Handle unknown event type, if necessary
+        }
+
+        // Acknowledge the received message
+        char ack = 1;
+        sendData(clientSocket, &ack, sizeof(ack));
+    }
+    closesocket(clientSocket); // Clean up the socket
+    printf("Client socket closed.\n");
+}
+
+void handleClientOLD(SOCKET clientSocket) {
     char buffer[1024];
     while (serverRunning) {
         ZeroMemory(buffer, sizeof(buffer));
@@ -122,8 +260,27 @@ void handleClient(SOCKET clientSocket) {
         }
 
         printf("Received data: %s\n", buffer);
-        // PostUpdateToUI(L"Server message to display in the edit control.");
-        AppendTextToConsole(hEdit, L"Client connected.");
+
+        // Convert char* (narrow string) to std::wstring (wide string)
+        int bufferSize = MultiByteToWideChar(CP_UTF8, 0, buffer, -1, nullptr, 0);
+        std::wstring wideBuffer(bufferSize, 0);
+        MultiByteToWideChar(CP_UTF8, 0, buffer, -1, &wideBuffer[0], bufferSize);
+
+        // Remove the null terminator added by MultiByteToWideChar
+        if (!wideBuffer.empty()) {
+            wideBuffer.pop_back();
+        }
+
+        std::wstring formattedMessage = L"Keypress received (" + wideBuffer + L") - \n";
+        AppendTextToConsole(hEdit, formattedMessage.c_str());
+
+        // Convert wideBuffer to an integer
+        int keyCode = std::stoi(wideBuffer);
+
+        // Try to send the KeyCode to MS Flight Simulator 2020
+        SendKeyPressUP(keyCode);
+        std::wstring formattedMessageOut = L"Simulated Keypress sent (" + std::to_wstring(keyCode) + L")\r\n";
+        AppendTextToConsole(hEdit, formattedMessageOut.c_str());
 
         char ack = 1; // Send an acknowledgment back to the client
         sendData(clientSocket, &ack, sizeof(ack));
@@ -160,7 +317,7 @@ void startServer() {
         std::string ipStr(clientIPStr); // Convert char* to std::string
         std::wstring wideIP(ipStr.begin(), ipStr.end()); // Convert std::string to std::wstring for UI
 
-        std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\n";
+        std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
 
         // PostUpdateToUI(formattedMessage.c_str());
         AppendTextToConsole(hEdit, formattedMessage.c_str());

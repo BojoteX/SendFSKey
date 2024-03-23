@@ -12,3 +12,7 @@ extern HWND hEdit;
 // To be abble to output to our window with the proper format
 std::wstring FormatForDisplay(const std::string& data);
 void AppendTextToConsole(HWND, const wchar_t* text);
+
+// To help send input to the window in focus from anywhere on my program
+UINT SendKeyPressUP(UINT KeyCode);
+UINT SendKeyPressDOWN(UINT KeyCode);

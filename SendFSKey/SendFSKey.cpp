@@ -1,6 +1,8 @@
+#include <Windows.h>
 #include <thread>
-#include "utilities.h"
+#include <sstream>
 #include "Globals.h"
+#include "utilities.h"
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 #include "Resource.h"
@@ -13,6 +15,7 @@ HWND hEdit = NULL; // Handle to your edit control
 
 // Operation mode
 bool isClientMode;
+bool is_key_down;
 
 MSG msg = { 0 };
 
@@ -83,7 +86,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit if Winsock initialization fails
     }
 
-  
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
     freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
@@ -149,10 +151,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
                 // Scroll to the bottom
                 SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
-
-                AppendTextToConsole(hEdit, L"Initializing server...\n");
-                AppendTextToConsole(hEdit, L"Server initialized successfully!\n");
-
             }
             else {
                 // Handle edit control creation failure
@@ -162,12 +160,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             // Handle window creation failure
         }
 
+        std::wstringstream ws;
         std::wstring serverIP = getServerIPAddress();
-        printf("SendFSKey v1.0\n");
-        printf("Copyright(c) 2024 by Jesus \"Bojote\" Altuve\n");
-        printf("\n");
-        printf("Server started succesfully on IP Address %ls using port %d\n", serverIP.c_str(), port);
-        printf("Ready to accept connections. Run SendFSKey on remote computer in client mode\n");
+
+        // Concatenating strings and variables
+
+        ws << L"SendFSKey v1.0 - Copyright(c) 2024 by Jesus \"Bojote\" Altuve\r\n";
+        ws << L"\r\n";
+        ws << L"Server started successfully on ";
+        ws << L"IP Address: " << serverIP.c_str() << L", "; // Correct usage of .c_str()
+        ws << L"using port: " << port << L".\r\n";
+        ws << L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\r\n";
+        ws << L"\r\n";
+
+        // Converting wstringstream to wstring
+        std::wstring finalMessage = ws.str();
+        
+        AppendTextToConsole(hEdit, finalMessage.c_str());
 
         // Just before starting the UI look we spawnn our thread and detach it
         std::thread ServerThread(startServer);
@@ -248,9 +257,10 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_KEYDOWN:
         if (isClientMode) {
-            // Send key press in client mode
-            sendKeyPress(static_cast<UINT>(wp));
 
+                is_key_down = 1;
+                // Send key press in client mode
+                sendKeyPress(static_cast<UINT>(wp), is_key_down);
 
                 wchar_t charCode = toupper(static_cast<wchar_t>(wp));
                 wprintf(L"Key Down: %c ", charCode);
@@ -260,6 +270,10 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     case WM_KEYUP:
         if (isClientMode) {
+
+                is_key_down = 0;
+                // Send key press in client mode
+                sendKeyPress(static_cast<UINT>(wp), is_key_down);
 
                 wchar_t charCode = toupper(static_cast<wchar_t>(wp));
                 wprintf(L"Key Up: %c ", charCode);
