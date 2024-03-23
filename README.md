@@ -23,7 +23,7 @@ Clone the repository and compile the project
 We welcome contributions! If you'd like to improve SendFSKey or suggest new features, please feel free to fork the repository, make your changes, and submit a pull request. All contributions will be reviewed for potential inclusion in the project.
 
 ## License
-SendFSKey is distributed under the MIT No Attribution License. See the [LICENSE](LICENSE) file for more details.
+SendFSKey is distributed under the MIT No Attribution License. See the [LICENSE.md](LICENSE) file for more details.
 
 ## Acknowledgements
 - A big thank you to the MSFS community for the inspiration and support.
