@@ -29,4 +29,10 @@ SendFSKey is distributed under the MIT No Attribution License. See the [LICENSE]
 ## Acknowledgements
 - A big thank you to the MSFS community for the inspiration and support.
 - Contributors who have dedicated their time and effort to enhance this project.
-- Spad NeXt developer for making me do this :) Ulrich, I say this in a good way
+- Spad.NeXt developer for making me do this :) Ulrich, I say this in a good way
+
+## Issues
+- For remote Spad.NeXt instalations make sure you DISABLE (yes), DISABLE the "Network Instalation" option in Spad.NeXt, otherwise keypresses will be blocked.
+
+## Pending items
+The core functionality works 100% but aditional cosmetic tweaks and options will be added soon.
