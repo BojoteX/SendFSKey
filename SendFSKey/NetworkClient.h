@@ -4,4 +4,4 @@ bool initializeWinsock();
 void sendKeyPress(UINT keyCode);
 void cleanupWinsock();
 bool establishConnection();
-void closeConnection();
+void closeClientConnection();
