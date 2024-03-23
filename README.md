@@ -11,14 +11,18 @@ SendFSKey is a lightweight application designed for seamless remote keyboard inp
 - **User-Friendly**: Easy to set up and use, regardless of your technical background.
 - **Open Source**: Freely available for personal and commercial use under the MIT No Attribution License.
 
-## Getting Started
+> [!WARNING]
+> Its possible you get a virus warning when downloading the .exe file, in that case I suggest you download the sources and compile it yourself.
 
 ### Prerequisites
 - Microsoft Flight Simulator 2020 installed on the server computer.
 - A network connection between the client and server machines.
 
 ### Installation
-Clone the repository and compile the project.
+Clone the repository and compile the project or download the .exe file provided
+
+> [!WARNING]
+> Keep in mind that in order for the program to be able to send keypresses to MSFS, the SERVER component needs to run as administrator. If you DON'T want to do this, you'll need to add SendFSKey.exe to your Flight Simulator exe.xml file so that it runs at the same privilege level the sim runs.
 
 ## Contributing
 We welcome contributions! If you'd like to improve SendFSKey or suggest new features, please feel free to fork the repository, make your changes, and submit a pull request. All contributions will be reviewed for potential inclusion in the project.
