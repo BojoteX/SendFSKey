@@ -118,97 +118,11 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
             cleanupWinsock();
             ExitProcess(1); // Terminate application if unable to reconnect after max attempts
         }
-
-        /*
-        printf("Connection error. Attempting to reconnect...\n");
-
-        // Close the old connection
-        closesocket(g_persistentSocket);
-
-        // Reconnection attempts with exponential backoff
-        int attempts = 0;
-        const int max_attempts = 5;
-        bool isConnected = false;
-        while (!isConnected && attempts < max_attempts) {
-            // Exponential backoff logic
-            Sleep((1 << attempts) * 1000); // 2^attempts seconds
-            attempts++;
-
-            // Attempt to re-establish the connection
-            isConnected = establishConnection(); // Assume this function attempts to connect and returns true on success
-            if (isConnected) {
-                printf("Reconnection successful on attempt %d.\n", attempts);
-                // After reconnecting, try sending the key code again
-                if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) != SOCKET_ERROR) {
-                    // Acknowledgment logic remains unchanged
-                    char ack;
-                    recv(g_persistentSocket, &ack, sizeof(ack), 0);
-                }
-                else {
-                    printf("Failed to send data after reconnecting.\n");
-                }
-            }
-            else {
-                printf("Reconnect attempt %d failed.\n", attempts);
-            }
-        }
-
-        if (!isConnected) {
-            // If still not connected after max attempts, exit
-            MessageBox(NULL, L"Failed to reconnect to server after multiple attempts. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
-            cleanupWinsock(); // Clean up Winsock resources
-            ExitProcess(1); // Exit with failure
-        }
-
-        */
     }
     else {
         // If send was successful, wait for server acknowledgment
         char ack;
         recv(g_persistentSocket, &ack, sizeof(ack), 0); // Blocking call until ack is received
-    }
-}
-
-void sendKeyPressOLD(UINT keyCode) {
-    // Convert the numerical value of the key code to a string
-    char buffer[16];
-    int len = snprintf(buffer, sizeof(buffer), "%u", keyCode);
-
-    // Try to send the key code over the network
-    if (len > 0 && send(g_persistentSocket, buffer, len, 0) == SOCKET_ERROR) {
-        printf("Connection error. Attempting to reconnect...\n");
-
-        // Close the old connection
-        closeClientConnection();
-
-        // Try to re-establish the connection with exponential backoff
-        int attempts = 0;
-        const int max_attempts = 5;
-        while (!establishConnection() && attempts < max_attempts) {
-            // Wait before retrying (exponential backoff)
-            int wait_time = 1 << attempts; // Equivalent to 2^attempts, using bitwise shift for integer exponentiation
-            printf("Reconnect attempt failed. Waiting %d seconds before retrying...\n", wait_time);
-            Sleep(wait_time * 1000); // Sleep uses milliseconds
-            attempts++;
-        }
-
-        // After reconnecting, try sending the key code again
-        if (attempts < max_attempts && send(g_persistentSocket, buffer, len, 0) != SOCKET_ERROR) {
-            // Wait for server acknowledgment
-            char ack;
-            recv(g_persistentSocket, &ack, sizeof(ack), 0);  // This will block until ack is received
-        }
-        else {
-            // Failed to reconnect or send data after retries
-            MessageBox(NULL, L"Failed to reconnect to server. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
-            cleanupWinsock();
-            ExitProcess(1);
-        }
-    }
-    else {
-        // If send was successful, wait for server acknowledgment
-        char ack;
-        recv(g_persistentSocket, &ack, sizeof(ack), 0);  // This will block until ack is received
     }
 }
 
