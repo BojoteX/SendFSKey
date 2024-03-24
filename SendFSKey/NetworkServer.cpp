@@ -1,4 +1,5 @@
 #include <ws2tcpip.h>
+#include <sstream>
 #include <thread>
 #include "Globals.h"
 #include "NetworkServer.h"
@@ -14,6 +15,7 @@ std::wstring getServerIPAddress() {
     DWORD hostnameLen = NI_MAXHOST;
     if (!GetComputerNameW(hostname, &hostnameLen)) {
         wprintf(L"GetComputerNameW failed with error: %d\n", GetLastError());
+        Log(L"GetCpmputerNameW failed.");
         return L"";
     }
 
@@ -31,6 +33,7 @@ std::wstring getServerIPAddress() {
     int result = getaddrinfo(narrowHostname, NULL, &hints, &res);
     if (result != 0) {
         wprintf(L"getaddrinfo failed with error: %d\n", result);
+        Log(L"getaddrinfo failed");
         return L"";
     }
 
@@ -58,12 +61,14 @@ bool initializeServer() {
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         printf("WSAStartup failed: %d\n", iResult);
+        Log(L"WSASStartup failed");
         return false;
     }
 
     g_listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (g_listenSocket == INVALID_SOCKET) {
         printf("Error at socket(): %ld\n", WSAGetLastError());
+        Log(L"Error at socket()");
         WSACleanup();
         return false;
     }
@@ -75,6 +80,7 @@ bool initializeServer() {
 
     if (bind(g_listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         printf("bind failed with error: %d\n", WSAGetLastError());
+        Log(L"Bind failed with error");
         closesocket(g_listenSocket);
         WSACleanup();
         return false;
@@ -82,6 +88,7 @@ bool initializeServer() {
 
     if (listen(g_listenSocket, SOMAXCONN) == SOCKET_ERROR) {
         printf("listen failed with error: %d\n", WSAGetLastError());
+        Log(L"Listen failed");
         closesocket(g_listenSocket);
         WSACleanup();
         return false;
@@ -112,6 +119,57 @@ void cleanupServer() {
     shutdownServer(); // Ensure the server is properly shut down
 }
 
+/*
+void handleClient(SOCKET clientSocket) {
+    // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 2 bytes for scanCode
+    unsigned char buffer[3];
+    while (serverRunning) {
+        ZeroMemory(buffer, sizeof(buffer));
+        int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0);
+        if (bytesReceived <= 0) {
+            printf("Error receiving data or client disconnected.\n");
+            Log(L"Error receiving data or client disconnected");
+            break; // Exit loop on error or disconnection
+        }
+
+        // First byte is the event type
+        char eventType = buffer[0];
+
+        // Next 2 bytes are the scanCode, ensure proper alignment and endianness
+        UINT scanCode;
+        memcpy(&scanCode, buffer + 1, sizeof(scanCode));
+
+        // Assuming scan codes are being sent as 2 bytes, adjust if necessary
+        scanCode = ntohs(scanCode); // Convert from network byte order to host byte order if needed
+
+        switch (eventType) {
+        case 'D':
+            Log(L"KEY_DOWN RECEIVED BY SERVER: " + std::to_wstring(scanCode));
+            printf("Key Down: %u\n", scanCode);
+            SendKeyPressDOWN(scanCode); // Now expecting a scanCode
+            break;
+        case 'U':
+            Log(L"KEY_UP RECEIVED BY SERVER: " + std::to_wstring(scanCode));
+            printf("Key Up: %u\n", scanCode);
+            SendKeyPressUP(scanCode); // Now expecting a scanCode
+            break;
+        default:
+            Log(L"UNKNOWN EVENT TYPE RECEIVED BY SERVER: " + std::to_wstring(scanCode));
+            printf("Unknown event type: %c\n", eventType);
+            break; // Optionally, handle unknown event type
+        }
+
+        // Send acknowledgment back to the client
+        char ack = 1;
+        send(clientSocket, &ack, sizeof(ack), 0);
+    }
+    printf("Client socket closed.\n");
+    closesocket(clientSocket); // Clean up the socket
+    Log(L"Client socket closed");
+}
+*/
+
+
 void handleClient(SOCKET clientSocket) {
     // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 4 bytes for keyCode
     unsigned char buffer[5];
@@ -121,6 +179,7 @@ void handleClient(SOCKET clientSocket) {
         int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0);
         if (bytesReceived <= 0) {
             printf("Error receiving data or client disconnected.\n");
+            Log(L"Error receiving data or client disconnected");
             break; // Exit loop on error or disconnection
         }
 
@@ -133,15 +192,18 @@ void handleClient(SOCKET clientSocket) {
 
         switch (eventType) {
         case 'D':
-            printf("Key Down: %u\n", keyCode);
+            Log(L"KEY_DOWN RECEIVED BY SERVER: " + keyCode);
+            printf("\nKey Down RECEIVED: %u\n", keyCode);
             SendKeyPressDOWN(keyCode);
             break;
         case 'U':
-            printf("Key Up: %u\n", keyCode);
+            Log(L"KEY_UP RECEIVED BY SERVER: " + keyCode);
+            printf("Key Up RECEIVED: %u\n", keyCode);
             SendKeyPressUP(keyCode);
             break;
         default:
-            printf("Unknown event type: %c\n", eventType);
+            Log(L"UNKNOWN_KEY RECEIVED BY SERVER: " + keyCode);
+            printf("Unknown event RECEIVED of type: %c\n", eventType);
             break; // Optionally, handle unknown event type
         }
 
@@ -151,6 +213,7 @@ void handleClient(SOCKET clientSocket) {
     }
     printf("Client socket closed.\n");
     closesocket(clientSocket); // Clean up the socket
+    Log(L"Client socket closed");
 }
 
 void startServer() {
@@ -163,18 +226,34 @@ void startServer() {
         sockaddr_in clientAddr; // Declare the structure to store client address
         int clientAddrLen = sizeof(clientAddr); // Length of client address
 
-        // SOCKET clientSocket = accept(g_listenSocket, NULL, NULL);
         SOCKET clientSocket = accept(g_listenSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
 
         if (clientSocket == INVALID_SOCKET) {
             printf("Failed to accept connection.\n");
+            Log(L"Failed to accept connection");
             continue; // Continue to accept the next connection
         }
+
+        /*
+        // Set a timeout for recv operations
+        struct timeval timeout;
+        timeout.tv_sec = 5;  // Timeout after 5 seconds
+        timeout.tv_usec = 0; // 0 microseconds
+
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+            printf("Failed to set socket timeout.\n");
+            // Decide how you want to handle this error. You might close the socket, log the error, etc.
+            closesocket(clientSocket);
+            Log(L"Closed socket for unresponsive client");
+            continue;
+        }
+        */
 
         // Use inet_ntop correctly
         char clientIPStr[INET_ADDRSTRLEN]; // Buffer where the IP string will be stored
         if (inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIPStr, INET_ADDRSTRLEN) == NULL) {
             printf("Failed to convert IP address.\n");
+            Log(L"Failed to convert IP address");
             continue;
         }
 

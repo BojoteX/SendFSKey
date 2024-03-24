@@ -15,7 +15,6 @@ HWND hEdit = NULL; // Handle to your edit control
 
 // Operation mode
 bool isClientMode;
-bool is_key_down;
 
 MSG msg = { 0 };
 
@@ -30,7 +29,7 @@ wchar_t const* className;
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
     OpenLogFile();
-    Log(L"Application Start");
+    Log(L"WinMain: Application started");
 
     // Check if the INI file exists
     if (!IniFileExists("SendFSKey.ini")) {
@@ -94,7 +93,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         SetConsoleTitleW(L"SendFSKey Client");
         // Establish connection at startup for client mode
         if (!establishConnection()) {
-            printf("Could not connect to IP Address %ls using port %d\n", serverIP.c_str(), port);
             MessageBox(NULL, L"Failed to connect to server. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
             return -1;
         }
@@ -203,6 +201,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
     cleanupWinsock();
 
+    Log(L"WinMain: Finished main loop");
     CloseLogFile(); // Ensure this is the last thing you do before exiting WinMain
     return (int)msg.wParam; // Return the exit code
 }
@@ -255,19 +254,102 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+
+    case WM_SYSKEYDOWN: {
+        // Extract the scan code from LPARAM
+        UINT scanCode = (lp >> 16) & 0x00ff;
+        UINT keyCodeNum = static_cast<UINT>(wp);
+
+        keyCodeNum = getKey(keyCodeNum);
+
+        printf("SYSTEM KEY_DOWN: (%lu)\n", keyCodeNum);
+        Log(L"SYSTEM KEY_DOWN SENT BY CLIENT: " + keyCodeNum);
+
+        bool is_key_down = 1;
+        sendKeyPress(keyCodeNum, is_key_down);
+
+        break;
+    }
+    case WM_KEYDOWN: {
+        // Extract the scan code from LPARAM
+        UINT scanCode = (lp >> 16) & 0x00ff;
+        UINT keyCodeNum = static_cast<UINT>(wp);
+
+        keyCodeNum = getKey(keyCodeNum);
+
+        printf("KEY_DOWN: (%lu)\n", keyCodeNum);
+        Log(L"KEY_DOWN SENT BY CLIENT: " + keyCodeNum);
+
+        bool is_key_down = 1;
+        sendKeyPress(keyCodeNum, is_key_down);
+
+        break;
+    }
+    case WM_SYSKEYUP: {
+        // Extract the scan code from LPARAM
+        UINT scanCode = (lp >> 16) & 0x00ff;
+        UINT keyCodeNum = static_cast<UINT>(wp);
+
+        keyCodeNum = getKey(keyCodeNum);
+
+        printf("SYSTEM KEY_UP: (%lu)\n", keyCodeNum);
+        Log(L"SYSTEM KEY_UP SENT BY CLIENT: " + keyCodeNum);
+
+        bool is_key_down = 0;
+        sendKeyPress(keyCodeNum, is_key_down);
+
+        break;
+    }
+    case WM_KEYUP:
+    {       // Extract the scan code from LPARAM
+            UINT scanCode = (lp >> 16) & 0x00ff;
+            UINT keyCodeNum = static_cast<UINT>(wp);
+
+            keyCodeNum = getKey(keyCodeNum);
+
+            printf("KEY_UP: (%lu)\n", keyCodeNum);
+            Log(L"KEY_UP SENT BY CLIENT: " + keyCodeNum);
+
+            bool is_key_down = 0;
+            sendKeyPress(keyCodeNum, is_key_down);
+
+            break;
+    }
+/*
+    case WM_SYSKEYDOWN:
     case WM_KEYDOWN:
         if (isClientMode) {
 
                 is_key_down = 1;
                 // Send key press in client mode
-                sendKeyPress(static_cast<UINT>(wp), is_key_down);
+
+                // If VK_SHIFT is received, determine if it's left or right
+                if (keyCodeToSend == VK_SHIFT) {
+                    if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
+                        keyCodeToSend = VK_LSHIFT; // Left SHIFT is pressed
+                    }
+                    else if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
+                        keyCodeToSend = VK_RSHIFT; // Right SHIFT is pressed
+                    }
+                }
+
+                sendKeyPress(static_cast<UINT>(wp), is_key_down);;
 
                 wchar_t charCode = toupper(static_cast<wchar_t>(wp));
                 wprintf(L"Key Down: %c ", charCode);
                 printf("(%llu)\n", static_cast<unsigned long long>(wp));
 
+                // Assuming wp is your WPARAM variable, and Log expects a std::wstring
+                UINT keyCodeNum = static_cast<UINT>(wp);
+
+                std::wstringstream wss;
+                wss << keyCodeNum;
+                std::wstring wKeyCodeStr = wss.str();
+
+                Log(L"KEY_DOWN SENT BY CLIENT: " + wKeyCodeStr);
         }
         break;
+    case WM_SYSKEYUP:
     case WM_KEYUP:
         if (isClientMode) {
 
@@ -279,8 +361,18 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
                 wprintf(L"Key Up: %c ", charCode);
                 printf("(%llu)\n", static_cast<unsigned long long>(wp));
 
+                // Assuming wp is your WPARAM variable, and Log expects a std::wstring
+                UINT keyCodeNum = static_cast<UINT>(wp);
+
+                std::wstringstream wss;
+                wss << keyCodeNum;
+                std::wstring wKeyCodeStr = wss.str();
+
+                Log(L"KEY_DOWN SENT BY CLIENT: " + wKeyCodeStr);
         }
         break;
+
+*/
     case WM_DESTROY:
         PostQuitMessage(0);
         break;

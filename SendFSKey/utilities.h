@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <iostream>
 #include <fstream>
 #include <shlwapi.h>
@@ -7,6 +8,7 @@
 #pragma comment(lib, "shlwapi.lib")
 
 std::wofstream logFile;
+std::mutex logMutex;
 
 // Settings
 std::wstring mode;
@@ -14,30 +16,28 @@ std::wstring serverIP;
 int port = 8028;
 
 void OpenLogFile() {
-    logFile.open("SendFSKey.log", std::wofstream::out | std::wofstream::app); // Open for writing in append mode
+    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
     if (!logFile.is_open()) {
-        std::wcerr << L"Failed to open log file." << std::endl;
-    }
-}
-
-void Log(const std::wstring& message) {
-    if (logFile.is_open()) {
-        logFile << message << std::endl;
-        // For immediate writing, you can flush after each log entry
-        logFile.flush();
+        logFile.open("SendFSKey.log", std::wofstream::out | std::wofstream::app);
+        if (!logFile.is_open()) {
+            std::wcerr << L"Failed to open log file." << std::endl;
+        }
     }
 }
 
 void CloseLogFile() {
+    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
     if (logFile.is_open()) {
         logFile.close();
     }
 }
 
-// Function to check if the INI file exists
-bool IniFileExists(const std::string& filename) {
-    std::ifstream ifile(filename.c_str());
-    return ifile.good();
+void Log(const std::wstring& message) {
+    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
+    if (logFile.is_open()) {
+        logFile << message << std::endl;
+        logFile.flush();
+    }
 }
 
 // Utility function to get the directory of the current executable
@@ -46,6 +46,12 @@ std::wstring GetExecutableDir() {
     GetModuleFileNameW(NULL, path, MAX_PATH); // Get the full executable path
     PathRemoveFileSpecW(path); // Remove the executable name, leaving the directory path
     return std::wstring(path);
+}
+
+// Function to check if the INI file exists
+bool IniFileExists(const std::string& filename) {
+    std::ifstream ifile(filename.c_str());
+    return ifile.good();
 }
 
 void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
@@ -78,4 +84,36 @@ std::wstring FormatForDisplay(const std::string& data) {
     // Format the message
     std::wstring formattedMessage = L"Received data: " + wideData + L"\n";
     return formattedMessage;
+}
+
+UINT getKey(UINT keyCodeNum) {
+
+    if (keyCodeNum == VK_SHIFT) {
+        if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
+            keyCodeNum = 160;
+        }
+        else if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
+            keyCodeNum = 161;
+        }
+    }
+
+    if (keyCodeNum == VK_CONTROL) {
+        if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) {
+            keyCodeNum = 162;
+        }
+        else if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) {
+            keyCodeNum = 163;
+        }
+    }
+
+    if (keyCodeNum == VK_MENU) {
+        if (GetAsyncKeyState(VK_LMENU) & 0x8000) {
+            keyCodeNum = 164;
+        }
+        else if (GetAsyncKeyState(VK_RMENU) & 0x8000) {
+            keyCodeNum = 165;
+        }
+    }
+
+    return keyCodeNum;
 }
