@@ -1,5 +1,4 @@
 #include <ws2tcpip.h>
-#include <cstring>
 #include "Globals.h"
 #include "NetworkClient.h"
 
@@ -9,7 +8,6 @@ SOCKET g_persistentSocket = INVALID_SOCKET; // Global persistent socket
 bool initializeWinsock() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        Log(L"Failed to initialize winsock");
         return false;
     }
     return true;
@@ -20,7 +18,6 @@ bool establishConnection() {
 
     g_persistentSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (g_persistentSocket == INVALID_SOCKET) {
-        Log(L"Socket creation failed");
         return false;
     }
 
@@ -74,65 +71,6 @@ void closeClientConnection() {
     }
 }
 
-/*
-void sendKeyPress(UINT scanCode, bool isKeyDown) {
-    unsigned char buffer[3]; // Adjusted buffer size: 1 byte for event type, 2 bytes for scan code
-    buffer[0] = isKeyDown ? 'D' : 'U'; // Event type flag
-
-    // Ensure proper byte order for the scanCode. Assuming little-endian architecture for simplicity.
-    buffer[1] = scanCode & 0xFF;         // Lower byte of the scan code
-    buffer[2] = (scanCode >> 8) & 0xFF;  // Upper byte of the scan code
-
-    // First attempt to send the key event
-    if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
-        printf("Connection error. Attempting to reconnect...\n");
-        Log(L"Connection error. Client attempting to reconnect.");
-
-        // Close the old connection
-        closeClientConnection(); // Assume this resets g_persistentSocket and handles necessary cleanup
-
-        // Try to re-establish the connection with exponential backoff
-        bool isConnected = false;
-        for (int attempts = 0; attempts < 5 && !isConnected; attempts++) {
-            Sleep((1 << attempts) * 1000); // Exponential backoff
-
-            isConnected = establishConnection(); // Tries to reconnect and updates g_persistentSocket on success
-            if (!isConnected) {
-                printf("Reconnect attempt %d failed. Waiting %d seconds before retrying...\n", attempts + 1, (1 << attempts));
-                Log(L"Reconnection attempt....");
-            }
-        }
-
-        // Check if reconnection was successful
-        if (isConnected) {
-            printf("Reconnection successful. Resending data...\n");
-            Log(L"Reconnection successful");
-            // After reconnecting, try sending the key code again
-            if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
-                printf("Failed to send data after reconnecting.\n");
-                Log(L"Failed to send data after reconnecting");
-                // Handle failure to resend data here
-            }
-            else {
-                char ack;
-                recv(g_persistentSocket, &ack, sizeof(ack), 0); // Await acknowledgment
-            }
-        }
-        else {
-            MessageBox(NULL, L"Failed to reconnect to server after multiple attempts. Exiting.", L"Network Error", MB_ICONERROR | MB_OK);
-            cleanupWinsock();
-            ExitProcess(1); // Terminate application if unable to reconnect after max attempts
-        }
-    }
-    else {
-        // If send was successful, wait for server acknowledgment
-        char ack;
-        recv(g_persistentSocket, &ack, sizeof(ack), 0); // Blocking call until ack is received
-    }
-}
-*/
-
-
 void sendKeyPress(UINT keyCode, bool isKeyDown) {
     unsigned char buffer[5];
     buffer[0] = isKeyDown ? 'D' : 'U'; // Event type flag
@@ -144,7 +82,6 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
     if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
 
         printf("Connection error. Attempting to reconnect...\n");
-        Log(L"Connection error. Client attempting to reconnect.");
 
         // Close the old connection
         closeClientConnection(); // Assume this resets g_persistentSocket and handles necessary cleanup
@@ -157,18 +94,15 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
             isConnected = establishConnection(); // Tries to reconnect and updates g_persistentSocket on success
             if (!isConnected) {
                 printf("Reconnect attempt %d failed. Waiting %d seconds before retrying...\n", attempts + 1, (1 << attempts));
-                Log(L"Reconnection attempt....");
             }
         }
 
         // Check if reconnection was successful
         if (isConnected) {
             printf("Reconnection successful. Resending data...\n");
-            Log(L"Reconnection succesfull");
             // After reconnecting, try sending the key code again
             if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
                 printf("Failed to send data after reconnecting.\n");
-                Log(L"Failed to send data after reconnecting");
                 // Handle failure to resend data here
             }
             else {

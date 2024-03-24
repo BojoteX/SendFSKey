@@ -1,11 +1,10 @@
 // SendInput.cpp
 #include <set>
 #include <Windows.h>
-#include <iostream>
 
 // Change how we send the keys
 bool USE_SCAN_CODE;
-int EXTENDED_DEBUG = 1;
+int EXTENDED_DEBUG = 0;
 
 UINT ScanCodeRelease(UINT KeyCode) {
     UINT scanCode = MapVirtualKey(KeyCode, MAPVK_VK_TO_VSC);

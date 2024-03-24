@@ -1,67 +1,59 @@
 #pragma once
 
-#include <mutex>
-#include <iostream>
+#include <shlobj.h>
 #include <fstream>
-#include <shlwapi.h>
+#include <TlHelp32.h>
 
-#pragma comment(lib, "shlwapi.lib")
-
-std::wofstream logFile;
-std::mutex logMutex;
+std::atomic<bool> isFlightSimulatorRunning(false);
 
 // Settings
 std::wstring mode;
 std::wstring serverIP;
 int port = 8028;
 
-void OpenLogFile() {
-    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
-    if (!logFile.is_open()) {
-        logFile.open("SendFSKey.log", std::wofstream::out | std::wofstream::app);
-        if (!logFile.is_open()) {
-            std::wcerr << L"Failed to open log file." << std::endl;
+// Function to get the %appdata%/Local/SendFSKey directory path
+std::wstring GetAppDataLocalSendFSKeyDir() {
+    wchar_t appDataPath[MAX_PATH];
+    // Use CSIDL_LOCAL_APPDATA instead of CSIDL_APPDATA to get the local app data folder
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appDataPath))) {
+        std::wstring sendFSKeyPath = std::wstring(appDataPath) + L"\\SendFSKey";
+        // Check if the directory exists
+        if (GetFileAttributesW(sendFSKeyPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            // Directory does not exist, create it
+
+            if (!CreateDirectoryW(sendFSKeyPath.c_str(), NULL)) {
+                DWORD error = GetLastError();
+                if (error != ERROR_ALREADY_EXISTS) {
+                    MessageBox(NULL, L"There was an error creating the configuration file.", L"Error", MB_ICONERROR | MB_OK);
+                }
+            }
         }
+        return sendFSKeyPath;
     }
+    // Fallback in case of failure
+    return L"";
 }
 
-void CloseLogFile() {
-    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
-    if (logFile.is_open()) {
-        logFile.close();
-    }
-}
-
-void Log(const std::wstring& message) {
-    std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
-    if (logFile.is_open()) {
-        logFile << message << std::endl;
-        logFile.flush();
-    }
-}
-
-// Utility function to get the directory of the current executable
-std::wstring GetExecutableDir() {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH); // Get the full executable path
-    PathRemoveFileSpecW(path); // Remove the executable name, leaving the directory path
-    return std::wstring(path);
-}
-
-// Function to check if the INI file exists
 bool IniFileExists(const std::string& filename) {
-    std::ifstream ifile(filename.c_str());
+    std::wstring appDataPath = GetAppDataLocalSendFSKeyDir();
+    std::wstring fullPath = appDataPath + L"\\" + std::wstring(filename.begin(), filename.end());
+    std::ifstream ifile(fullPath);
     return ifile.good();
 }
 
 void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
-    std::wstring iniPath = GetExecutableDir() + L"\\SendFSKey.ini"; // Build the full INI file path
-
-    WritePrivateProfileStringW(L"Settings", L"Mode", mode.c_str(), iniPath.c_str());
-    if (mode == L"Client") {
-        WritePrivateProfileStringW(L"Settings", L"IP", ip.c_str(), iniPath.c_str());
+    std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini"; // Build the full INI file path
+    if (!WritePrivateProfileStringW(L"Settings", L"Mode", mode.c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
     }
-    WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str());
+    if (mode == L"Client") {
+        if (!WritePrivateProfileStringW(L"Settings", L"IP", ip.c_str(), iniPath.c_str())) {
+            DWORD error = GetLastError();
+        }
+    }
+    if (!WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
+    }
 }
 
 void AppendTextToConsole(HWND hEdit, const wchar_t* text) {
@@ -116,4 +108,42 @@ UINT getKey(UINT keyCodeNum) {
     }
 
     return keyCodeNum;
+}
+
+void MonitorFlightSimulatorProcess() {
+    const wchar_t* flightSimulatorExe = L"FlightSimulator.exe";
+
+    while (true) {
+        bool found = false;
+        PROCESSENTRY32 entry;
+        entry.dwSize = sizeof(PROCESSENTRY32);
+
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+        if (Process32First(snapshot, &entry)) {
+            do {
+                if (!_wcsicmp(entry.szExeFile, flightSimulatorExe)) {
+                    found = true;
+                    break;
+                }
+            } while (Process32Next(snapshot, &entry));
+        }
+
+        CloseHandle(snapshot);
+
+        isFlightSimulatorRunning = found;
+
+        if (!found) {
+            // Flight Simulator is not running; initiate shutdown procedure
+            MessageBoxA(NULL, "Flight Simulator is not running, will now exit.", "Error", MB_ICONERROR);
+
+            // Cleanup
+            shutdownServer();
+
+            exit(0); // or a graceful shutdown method for your application
+        }
+
+        // Sleep for a bit before checking again
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
 }
