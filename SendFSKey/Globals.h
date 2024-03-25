@@ -26,3 +26,5 @@ UINT SendKeyPressDOWN(UINT KeyCode);
 void shutdownServer();
 void startServer(); 
 bool ServerStart(); // Used by windowproc in window server start
+bool isServerUp(); // Used to check if server is running
+bool verifyServerSignature(SOCKET serverSocket); // Used to verify server signature

@@ -57,6 +57,7 @@ std::wstring getServerIPAddress() {
 }
 
 bool initializeServer() {
+
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
@@ -140,15 +141,15 @@ void handleClient(SOCKET clientSocket) {
 
         switch (eventType) {
         case 'D':
-            printf("\nKey Down RECEIVED: %u\n", keyCode);
+            printf("\n[KEY_DOWN] RECEIVED: (%u)\n", keyCode);
             SendKeyPressDOWN(keyCode);
             break;
         case 'U':
-            printf("Key Up RECEIVED: %u\n", keyCode);
+            printf("[KEY_UP] RECEIVED: (%u)\n", keyCode);
             SendKeyPressUP(keyCode);
             break;
         default:
-            printf("Unknown event RECEIVED of type: %c\n", eventType);
+            printf("[UNKNOWN] RECEIVED of type: %c\n", eventType);
             break; // Optionally, handle unknown event type
         }
 
@@ -202,4 +203,9 @@ void startServer() {
         std::thread serverThread(handleClient, clientSocket);
         serverThread.detach(); // Detach the thread to handle the client independently
     }
+}
+
+bool isServerUp() {
+    // Check if the server running flag is true and the listen socket is valid
+    return serverRunning.load() && g_listenSocket != INVALID_SOCKET;
 }

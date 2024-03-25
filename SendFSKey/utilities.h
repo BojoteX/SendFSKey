@@ -224,11 +224,11 @@ void DeleteIniFileAndRestart() {
 }
 
 bool ServerStart() {
-    std::wstringstream ws;
+	// Initialize the server
     std::wstring serverIP = getServerIPAddress();
 
     // Concatenating strings and variables
-
+    std::wstringstream ws;
     ws << L"SendFSKey v1.0 - Copyright(c) 2024 by Jesus \"Bojote\" Altuve\r\n";
     ws << L"\r\n";
     ws << L"Server started successfully on ";
@@ -239,7 +239,6 @@ bool ServerStart() {
 
     // Converting wstringstream to wstring
     std::wstring finalMessage = ws.str();
-
     AppendTextToConsole(hEdit, finalMessage.c_str());
 
     // Just before starting the UI look we spawnn our thread and detach it

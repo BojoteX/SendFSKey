@@ -3,7 +3,7 @@
 #include <Windows.h>
 
 // Change how we send the keys
-bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes
+bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with some keys like INSERT, DELETE, etc.)
 int EXTENDED_DEBUG = 0;
 
 // Our target MSFS Window
@@ -89,8 +89,10 @@ UINT SendKeyWithScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
     SendInput(1, &ip, sizeof(INPUT));
 
     if (isKeyDown)
+        printf("[KEY_DOWN] SendInput SCAN_CODE (%u) \n", virtualKeyCode);
         if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
     else
+        printf("[KEY_UP] SendInput SCAN_CODE (%u) \n", virtualKeyCode);
         if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
 
     return 1;
@@ -102,12 +104,10 @@ UINT SendKeyWithoutScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
     ip.type = INPUT_KEYBOARD;
     ip.ki.wVk = virtualKeyCode; // Use the decimal value directly as the virtual key code.
 
-    /*
     // Check if the key is an extended key
     if (virtualKeyCode == VK_RMENU || virtualKeyCode == VK_RCONTROL || virtualKeyCode == VK_INSERT) {
         ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
     }
-    */
 
     if (!isKeyDown) {
         // If it's a key release, add KEYEVENTF_KEYUP
@@ -117,15 +117,18 @@ UINT SendKeyWithoutScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
     SendInput(1, &ip, sizeof(INPUT));
 
     if (isKeyDown)
+        printf("[KEY_DOWN] SendInput VK_MODE (%u) \n", virtualKeyCode);
         if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
-        else
-            if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
+    else
+        printf("[KEY_UP] SendInput VK_MODE (%u) \n", virtualKeyCode);
+        if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
 
     return 1;
 }
 
 UINT SendKeyPressDOWN(UINT KeyCode) {
 
+    // We only want to send the key press if the MSFS window is in focus, if not, we bring it to focus
     BringWindowToForegroundByClassName(MSFSclassName);
 
     if (USE_SCAN_CODE) {
@@ -136,16 +139,14 @@ UINT SendKeyPressDOWN(UINT KeyCode) {
         ip.type = INPUT_KEYBOARD;
         ip.ki.wVk = KeyCode; // Use the decimal value directly as the virtual key code.
 
-        /*
         // Check if the key is an extended key
         if (KeyCode == VK_RMENU || KeyCode == VK_RCONTROL || KeyCode == VK_INSERT) {
             ip.ki.dwFlags = KEYEVENTF_EXTENDEDKEY;
         }
-        */
 
         // Send the KEY_DOWN
         SendInput(1, &ip, sizeof(INPUT));
-        printf("SendInput: KEY_DOWN sent: %u\n", KeyCode);
+        printf("[KEY_DOWN] SendInput VK_MODE (%u) \n", KeyCode);
     }
     return 1;
 }
@@ -210,10 +211,10 @@ UINT SendKeyPressUP(UINT KeyCode) {
     }
 
     if (USE_SCAN_CODE) {
-        SendKeyWithScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN
+        SendKeyWithScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN and 0 Means KEY_UP
     }
     else {
-        SendKeyWithoutScanCode(KeyCode, FALSE); // FALSE for key release
+        SendKeyWithoutScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN and 0 Means KEY_UP
     }
 
     if (EXTENDED_DEBUG) {

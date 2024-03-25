@@ -8,7 +8,8 @@
 #include "Resource.h"
 
 HINSTANCE g_hInst = NULL;  // Definition
-HWND hEdit = NULL; // Handle to your edit control
+HWND hEdit = NULL; // Handle to your server edit control
+HWND hEditClient = NULL; // Handle to your client edit control
 
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -89,7 +90,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     if (isClientMode) {
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
-        wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey (Client Mode)";
+        wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey Client";
         wchar_t const* className = L"AceApp";
 
         // Open our client window
@@ -101,16 +102,40 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (!RegisterClass(&wc)) return -1;
 
-        HWND hWnd = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        // Main Client Window
+        HWND hWndClient = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             100, 100, 800, 600, nullptr, nullptr, hInstance, nullptr);
-        if (!hWnd) return -1;
+
+        // Create an edit control for the client window
+        if (hWndClient) {
+            hEditClient = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndClient, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
+            if (hEditClient) {
+                HFONT hFont = CreateFont(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+                SendMessage(hEditClient, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+                // Scroll to the bottom
+                SendMessage(hEditClient, EM_SCROLLCARET, 0, 0);
+            }
+            else {
+                // Handle edit control creation failure
+            }
+        }
+        else {
+            if (!hWndClient) return -1;
+        }
 
         // Establish connection at startup for client mode
         if (!establishConnection()) {
             MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
             // return -1;
         }
+        else {
+            // Converting wstringstream to wstring
+            std::wstring finalMessage = L"Connected to server\n";
+            AppendTextToConsole(hEditClient, finalMessage.c_str());
+        }
 
+        // This is our window loop for the client
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -120,7 +145,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     else if (!isClientMode) {
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
-        wchar_t const* windowName = L"SendFSKey (Server Mode)";
+        wchar_t const* windowName = L"SendFSKey - Server";
         wchar_t const* className = L"BojoteApp";
 
         // Open our server window
@@ -132,7 +157,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (!RegisterClass(&ws)) return -1;
 
+        // Main Server Window
         HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 780, 580, NULL, NULL, hInstance, NULL);
+
+        // Create an edit control for the server window
         if (hWndServer) {
             hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndServer, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
             if (hEdit) {
@@ -147,15 +175,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             }
         }
         else {
-            // Handle window creation failure
+            if (!hWndServer) return -1;
         }
 
         if (!initializeServer()) {
-            MessageBox(NULL, L"Could not start server. Port is probably busy or server is already running.", L"Network Error", MB_ICONERROR | MB_OK);
+            MessageBox(NULL, L"Could not start server. Port is already being used or server is already running.", L"Network Error", MB_ICONERROR | MB_OK);
             // return -1;  // This return should happen regardless of the DEBUG flag's state
         }
 
-        // This is our window loop
+        // This is the server window loop
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -252,17 +280,18 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDM_ABOUT:
             DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
-        case ID_CLIENT_CONNECT:
-            if(!establishConnection())
+        case ID_CLIENT_CONNECT: {
+            closeClientConnection(); // Close the existing connection if any and re-establish
+            if (!establishConnection()) {
                 MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
-            else
-                MessageBox(NULL, L"Connection succesfull", L"Connected", MB_ICONINFORMATION | MB_OK);
+            }
             break;
+        }
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
             break;
         case IDM_ENABLE_CONSOLE:
-            ToggleConsoleVisibility(L"SendFSKey Client Console");
+            ToggleConsoleVisibility(L"SendFSKey Console - Client");
             break;
         case IDM_RESET_SETTINGS:
             DeleteIniFileAndRestart();
@@ -281,7 +310,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         keyCodeNum = getKey(keyCodeNum);
 
-        printf("SYSTEM KEY_DOWN: (%lu)\n", keyCodeNum);
+        printf("KEY_DOWN (SYSTEM_KEY): (%lu)\n", keyCodeNum);
 
         bool is_key_down = 1;
         sendKeyPress(keyCodeNum, is_key_down);
@@ -309,7 +338,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         keyCodeNum = getKey(keyCodeNum);
 
-        printf("SYSTEM KEY_UP: (%lu)\n", keyCodeNum);
+        printf("KEY_UP (SYSTEM_KEY): (%lu)\n", keyCodeNum);
 
         bool is_key_down = 0;
         sendKeyPress(keyCodeNum, is_key_down);
@@ -354,10 +383,15 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             DeleteIniFileAndRestart();
             break;
         case ID_SERVER_CONNECT:
-            if (!initializeServer())
-                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-            else
-                MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
+            if (isServerUp()) {
+                MessageBox(NULL, L"Server is already running", L"Error", MB_ICONERROR | MB_OK);
+            }
+            else {
+				if (!initializeServer())
+					MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
+				else
+					MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
+			}
             break;
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
