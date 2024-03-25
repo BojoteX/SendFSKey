@@ -138,16 +138,13 @@ void MonitorFlightSimulatorProcess() {
             if (!isFlightSimulatorRunning()) {
                 // Flight Simulator is not running; initiate shutdown procedure
                 MessageBoxA(NULL, "Flight Simulator is NOT running, will now exit.", "Error", MB_ICONERROR);
-
-                // Cleanup
-                shutdownServer();
-
-                // Exit application
-                PostQuitMessage(0); // Or use a graceful shutdown method suitable for your application
                 break;
             }
         }
-        }).detach(); // Detach the thread to allow it to run independently
+        // Exit application
+        shutdownServer();
+        ExitProcess(1); // Terminate application if unable to reconnect after max attempts
+    }).detach(); // Detach the thread to allow it to run independently
 }
 
 void ToggleConsoleVisibility(const std::wstring& title) {

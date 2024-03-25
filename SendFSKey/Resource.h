@@ -2,11 +2,12 @@
 // Microsoft Visual C++ generated include file.
 // Used by SendFSKey.rc
 //
+#define IDOK                            1
 #define IDC_MYICON                      2
 #define IDC_MAIN_EDIT                   101
 #define IDD_SENDFSKEY_DIALOG            102
 #define IDS_APP_TITLE                   103
-#define IDD_ABOUTBOX                    104
+#define IDM_ABOUT_BOX                   104
 #define IDM_ABOUT                       105
 #define IDM_EXIT                        106
 #define IDI_SENDFSKEY                   107
@@ -31,6 +32,8 @@
 #define ID_SETTINGS_RESET32779          32779
 #define ID_CLIENT_CONSOLE               32780
 #define ID_CLIENT_EXIT                  32781
+#define ID_CLIENT_CONNECT               32782
+#define ID_SERVER_CONNECT               32783
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -38,8 +41,8 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        133
-#define _APS_NEXT_COMMAND_VALUE         32782
+#define _APS_NEXT_RESOURCE_VALUE        134
+#define _APS_NEXT_COMMAND_VALUE         32784
 #define _APS_NEXT_CONTROL_VALUE         1008
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

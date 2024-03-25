@@ -7,12 +7,13 @@
 #include "NetworkServer.h"
 #include "Resource.h"
 
+HINSTANCE g_hInst = NULL;  // Definition
+HWND hEdit = NULL; // Handle to your edit control
+
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-
-HWND hEdit = NULL; // Handle to your edit control
-HINSTANCE g_hInst = NULL;  // Definition
+INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 // Operation mode
 bool isClientMode;
@@ -85,13 +86,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit if Winsock initialization fails
     }
 
-
-  
     if (isClientMode) {
         // Establish connection at startup for client mode
         if (!establishConnection()) {
             MessageBox(NULL, L"Failed to connect to server. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
-            return -1;
+            // return -1;
         }
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
@@ -271,8 +270,14 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
-        case IDD_ABOUTBOX:
-            DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutDlgProc);
+        case IDM_ABOUT:
+            DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
+            break;
+        case ID_CLIENT_CONNECT:
+            establishConnection();
+            break;
+        case ID_CLIENT_EXIT:
+            DestroyWindow(hWnd);
             break;
         case IDM_ENABLE_CONSOLE:
             ToggleConsoleVisibility(L"SendFSKey Client Console");
@@ -281,6 +286,9 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             DeleteIniFileAndRestart();
             break;
             // Add cases for other menu items...
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
         }
         break;
     }
@@ -354,8 +362,8 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
-        case IDD_ABOUTBOX:
-            DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutDlgProc);
+        case IDM_ABOUT:
+            DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
         case IDM_ENABLE_CONSOLE:
             ToggleConsoleVisibility(L"SendFSKey Server Console");
@@ -363,7 +371,9 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDM_RESET_SETTINGS:
             DeleteIniFileAndRestart();
             break;
-            // Add additional cases for other menu commands here
+        case ID_CLIENT_EXIT:
+            DestroyWindow(hWnd);
+            break;
         }
         break; // End of WM_COMMAND
     }

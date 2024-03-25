@@ -3,7 +3,7 @@
 #include <Windows.h>
 
 // Change how we send the keys
-bool USE_SCAN_CODE;
+bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes
 int EXTENDED_DEBUG = 0;
 
 UINT ScanCodeRelease(UINT KeyCode) {
@@ -42,19 +42,6 @@ UINT KeyRelease(UINT KeyCode) {
     return 1;
 }
 
-UINT getExtendedKey(UINT keyCodeNum) {
-    switch (keyCodeNum) {
-    case VK_SHIFT:
-        return (GetAsyncKeyState(VK_LSHIFT) & 0x8000) ? VK_LSHIFT : VK_RSHIFT;
-    case VK_CONTROL:
-        return (GetAsyncKeyState(VK_LCONTROL) & 0x8000) ? VK_LCONTROL : VK_RCONTROL;
-    case VK_MENU:
-        return (GetAsyncKeyState(VK_LMENU) & 0x8000) ? VK_LMENU : VK_RMENU;
-    default:
-        return keyCodeNum; // Return the original key code if it doesn't match the above cases
-    }
-}
-
 UINT SendKeyWithScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
     UINT scanCode = MapVirtualKey(virtualKeyCode, MAPVK_VK_TO_VSC);
     INPUT ip = {};
@@ -83,9 +70,36 @@ UINT SendKeyWithScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
     return 1;
 }
 
+UINT SendKeyWithoutScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
+    INPUT ip = {};
+
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.wVk = virtualKeyCode; // Use the decimal value directly as the virtual key code.
+
+    /*
+    // Check if the key is an extended key
+    if (virtualKeyCode == VK_RMENU || virtualKeyCode == VK_RCONTROL || virtualKeyCode == VK_INSERT) {
+        ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    }
+    */
+
+    if (!isKeyDown) {
+        // If it's a key release, add KEYEVENTF_KEYUP
+        ip.ki.dwFlags |= KEYEVENTF_KEYUP;
+    }
+
+    SendInput(1, &ip, sizeof(INPUT));
+
+    if (isKeyDown)
+        if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
+        else
+            if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
+
+    return 1;
+}
+
 UINT SendKeyPressDOWN(UINT KeyCode) {
 
-    USE_SCAN_CODE = 1;
     if (USE_SCAN_CODE) {
         SendKeyWithScanCode(KeyCode, 1); // 1 Means KEY_DOWN
     }
@@ -93,6 +107,13 @@ UINT SendKeyPressDOWN(UINT KeyCode) {
         INPUT ip = { 0 };
         ip.type = INPUT_KEYBOARD;
         ip.ki.wVk = KeyCode; // Use the decimal value directly as the virtual key code.
+
+        /*
+        // Check if the key is an extended key
+        if (KeyCode == VK_RMENU || KeyCode == VK_RCONTROL || KeyCode == VK_INSERT) {
+            ip.ki.dwFlags = KEYEVENTF_EXTENDEDKEY;
+        }
+        */
 
         // Send the KEY_DOWN
         SendInput(1, &ip, sizeof(INPUT));
@@ -112,75 +133,64 @@ UINT SendKeyPressUP(UINT KeyCode) {
     // Populate keyCodes based on the current state of SHIFT, CONTROL, and ALT keys
     if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
         keyCodes.insert(VK_LSHIFT);
-        // keyCodes.insert(VK_SHIFT); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LSHIFT);
         found = 1;
     }
     if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
         keyCodes.insert(VK_RSHIFT);
-        // keyCodes.insert(VK_SHIFT); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RSHIFT);
         found = 1;
     }
     if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) {
         keyCodes.insert(VK_LCONTROL);
-        // keyCodes.insert(VK_CONTROL); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LCONTROL);
         found = 1;
     }
     if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) {
         keyCodes.insert(VK_RCONTROL);
-        // keyCodes.insert(VK_CONTROL); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RCONTROL);
         found = 1;
     }
     if (GetAsyncKeyState(VK_LMENU) & 0x8000) {
         keyCodes.insert(VK_LMENU);
-        // keyCodes.insert(VK_MENU); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LMENU);
         found = 1;
     }
     if (GetAsyncKeyState(VK_RMENU) & 0x8000) {
         keyCodes.insert(VK_RMENU);
-        // keyCodes.insert(VK_MENU); // We add the parent switch just in case
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RMENU);
         found = 1;
     }
 
+    // This is just a precaution
     if (found) {
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Iterated the array for KeyReleases above\n");
-        for (UINT keyCode : keyCodes) {
-            SendKeyWithScanCode(keyCode, FALSE); // FALSE for key release
+
+        if (USE_SCAN_CODE) {
+            for (UINT keyCode : keyCodes) {
+                SendKeyWithScanCode(keyCode, FALSE); // FALSE for key release
+            }
         }
-        // I can leave the function
+        else {
+            for (UINT keyCode : keyCodes) {
+                SendKeyWithoutScanCode(keyCode, FALSE); // FALSE for key release
+            }
+        }
     }
     else {
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] No modification was needed: %u\n", KeyCode);
     }
 
-    USE_SCAN_CODE = 1;
     if (USE_SCAN_CODE) {
-        SendKeyWithScanCode(KeyCode, 0); // 1 Means KEY_UP
+        SendKeyWithScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN
     }
     else {
-        INPUT ip = { 0 };
-        ip.type = INPUT_KEYBOARD;
-
-        // Here we get the actual L or R extended key (if pressed) otherwise we simply use the passed KeyCode
-        KeyCode = getExtendedKey(KeyCode);
-
-        // Key up
-        ip.ki.wVk = KeyCode; // Use the decimal value directly as the virtual key code.
-        ip.ki.dwFlags = KEYEVENTF_KEYUP; // Indicate key release
-
-        // Send the KEY_UP
-        SendInput(1, &ip, sizeof(INPUT));
-        printf("SendInput: KEY_UP sent: %u\n", KeyCode);
+        SendKeyWithoutScanCode(KeyCode, FALSE); // FALSE for key release
     }
 
     if (EXTENDED_DEBUG) {
         // Slight pause after the key up to see what got stuck
-        Sleep(50);
+        Sleep(25);
         for (int key = 0; key <= 0xFF; ++key) {
             if (GetAsyncKeyState(key) & 0x8000) {
                 printf("[DEBUG] The following key is still in a KEY_DOWN state: %u\n", key);
