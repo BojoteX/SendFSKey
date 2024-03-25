@@ -222,3 +222,29 @@ void DeleteIniFileAndRestart() {
     // Restart the application
     RestartApplication();
 }
+
+bool ServerStart() {
+    std::wstringstream ws;
+    std::wstring serverIP = getServerIPAddress();
+
+    // Concatenating strings and variables
+
+    ws << L"SendFSKey v1.0 - Copyright(c) 2024 by Jesus \"Bojote\" Altuve\r\n";
+    ws << L"\r\n";
+    ws << L"Server started successfully on ";
+    ws << L"IP Address: " << serverIP.c_str() << L", "; // Correct usage of .c_str()
+    ws << L"using port: " << port << L".\r\n";
+    ws << L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\r\n";
+    ws << L"\r\n";
+
+    // Converting wstringstream to wstring
+    std::wstring finalMessage = ws.str();
+
+    AppendTextToConsole(hEdit, finalMessage.c_str());
+
+    // Just before starting the UI look we spawnn our thread and detach it
+    std::thread ServerThread(startServer);
+    ServerThread.detach(); // Detach the thread to handle the client independently
+
+    return 1;
+}

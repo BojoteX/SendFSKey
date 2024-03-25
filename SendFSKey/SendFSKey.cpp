@@ -87,11 +87,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
 
     if (isClientMode) {
-        // Establish connection at startup for client mode
-        if (!establishConnection()) {
-            MessageBox(NULL, L"Failed to connect to server. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
-            // return -1;
-        }
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey (Client Mode)";
@@ -110,6 +105,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             100, 100, 800, 600, nullptr, nullptr, hInstance, nullptr);
         if (!hWnd) return -1;
 
+        // Establish connection at startup for client mode
+        if (!establishConnection()) {
+            MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
+            // return -1;
+        }
+
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -117,10 +118,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     }
     else if (!isClientMode) {
-        if (!initializeServer()) {
-            MessageBox(NULL, L"Could not start server. Port is probably busy or not enough permissions.", L"Network Error", MB_ICONERROR | MB_OK);
-            return -1;  // This return should happen regardless of the DEBUG flag's state
-        }
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey (Server Mode)";
@@ -135,12 +132,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (!RegisterClass(&ws)) return -1;
 
-        HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 800, 200, NULL, NULL, hInstance, NULL);
+        HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 780, 580, NULL, NULL, hInstance, NULL);
         if (hWndServer) {
             hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndServer, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
             if (hEdit) {
-
-
                 HFONT hFont = CreateFont(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
                 SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
 
@@ -155,28 +150,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             // Handle window creation failure
         }
 
-        std::wstringstream ws;
-        std::wstring serverIP = getServerIPAddress();
+        if (!initializeServer()) {
+            MessageBox(NULL, L"Could not start server. Port is probably busy or server is already running.", L"Network Error", MB_ICONERROR | MB_OK);
+            // return -1;  // This return should happen regardless of the DEBUG flag's state
+        }
 
-        // Concatenating strings and variables
-
-        ws << L"SendFSKey v1.0 - Copyright(c) 2024 by Jesus \"Bojote\" Altuve\r\n";
-        ws << L"\r\n";
-        ws << L"Server started successfully on ";
-        ws << L"IP Address: " << serverIP.c_str() << L", "; // Correct usage of .c_str()
-        ws << L"using port: " << port << L".\r\n";
-        ws << L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\r\n";
-        ws << L"\r\n";
-
-        // Converting wstringstream to wstring
-        std::wstring finalMessage = ws.str();
-        
-        AppendTextToConsole(hEdit, finalMessage.c_str());
-
-        // Just before starting the UI look we spawnn our thread and detach it
-        std::thread ServerThread(startServer);
-        ServerThread.detach(); // Detach the thread to handle the client independently
-
+        // This is our window loop
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -274,7 +253,10 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
         case ID_CLIENT_CONNECT:
-            establishConnection();
+            if(!establishConnection())
+                MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
+            else
+                MessageBox(NULL, L"Connection succesfull", L"Connected", MB_ICONINFORMATION | MB_OK);
             break;
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
@@ -371,8 +353,17 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDM_RESET_SETTINGS:
             DeleteIniFileAndRestart();
             break;
+        case ID_SERVER_CONNECT:
+            if (!initializeServer())
+                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
+            else
+                MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
+            break;
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
+            break;
+        case WM_DESTROY:
+            PostQuitMessage(0);
             break;
         }
         break; // End of WM_COMMAND

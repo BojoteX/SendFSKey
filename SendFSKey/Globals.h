@@ -12,16 +12,17 @@ extern HINSTANCE g_hInst;
 
 // To use from anywhere
 void sendKeyPress(UINT keyCode, bool isKeyDown);
+void AppendTextToConsole(HWND, const wchar_t* text);
 void MonitorFlightSimulatorProcess();
 bool isFlightSimulatorRunning();
-
-// To be abble to output to our window with the proper format
+std::wstring getServerIPAddress();
 std::wstring FormatForDisplay(const std::string& data);
-void AppendTextToConsole(HWND, const wchar_t* text);
 
 // To help send input to the window in focus from anywhere on my program
 UINT SendKeyPressUP(UINT KeyCode);
 UINT SendKeyPressDOWN(UINT KeyCode);
 
-// To shutdown from anywhere and clean
+// To shutdown or start from anywhere and clean
 void shutdownServer();
+void startServer(); 
+bool ServerStart(); // Used by windowproc in window server start

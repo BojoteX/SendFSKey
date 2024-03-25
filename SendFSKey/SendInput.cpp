@@ -6,6 +6,32 @@
 bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes
 int EXTENDED_DEBUG = 0;
 
+// Our target MSFS Window
+const char* MSFSclassName = "AceApp";
+
+// Function to check if the specified window by class name is the foreground window
+bool IsWindowInFocusByClassName(const char* MSFSclassName) {
+    HWND hwndTarget = FindWindowA(MSFSclassName, NULL); // Window title is NULL since we're using class name
+    return GetForegroundWindow() == hwndTarget;
+}
+
+// Function to bring the specified window by class name to the foreground if it's not already
+bool BringWindowToForegroundByClassName(const char* MSFSclassName) {
+    HWND hwndTarget = FindWindowA(MSFSclassName, NULL); // Window title is NULL since we're using class name
+    if (hwndTarget == NULL) {
+        // Window not found
+        return false;
+    }
+
+    if (GetForegroundWindow() != hwndTarget) {
+        // Window is not in focus, attempt to bring it to foreground
+        return SetForegroundWindow(hwndTarget) != 0;
+    }
+
+    // Window was already in focus
+    return true;
+}
+
 UINT ScanCodeRelease(UINT KeyCode) {
     UINT scanCode = MapVirtualKey(KeyCode, MAPVK_VK_TO_VSC);
 
@@ -99,6 +125,8 @@ UINT SendKeyWithoutScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
 }
 
 UINT SendKeyPressDOWN(UINT KeyCode) {
+
+    BringWindowToForegroundByClassName(MSFSclassName);
 
     if (USE_SCAN_CODE) {
         SendKeyWithScanCode(KeyCode, 1); // 1 Means KEY_DOWN

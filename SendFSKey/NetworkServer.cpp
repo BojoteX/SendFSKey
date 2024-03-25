@@ -2,8 +2,12 @@
 #include <ws2tcpip.h>
 #include "NetworkServer.h"
 
-std::atomic<bool> serverRunning;
+// Define the expected server signature
+const char* SERVER_SIGNATURE = "SendFSKeySSv1";
+
 SOCKET g_listenSocket = INVALID_SOCKET;
+
+std::atomic<bool> serverRunning;
 
 std::wstring getServerIPAddress() {
     wchar_t hostname[NI_MAXHOST] = L"";
@@ -86,6 +90,9 @@ bool initializeServer() {
         return false;
     }
 
+    // All set!
+    ServerStart();
+
     return true;
 }
 
@@ -112,6 +119,7 @@ void cleanupServer() {
 }
 
 void handleClient(SOCKET clientSocket) {
+
     // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 4 bytes for keyCode
     unsigned char buffer[5];
     while (serverRunning) {
@@ -187,6 +195,9 @@ void startServer() {
 
         // PostUpdateToUI(formattedMessage.c_str());
         AppendTextToConsole(hEdit, formattedMessage.c_str());
+
+        // Send the server signature immediately after accepting the connection
+        send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
 
         std::thread serverThread(handleClient, clientSocket);
         serverThread.detach(); // Detach the thread to handle the client independently
