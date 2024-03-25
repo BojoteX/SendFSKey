@@ -12,6 +12,7 @@ LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 HWND hEdit = NULL; // Handle to your edit control
+HINSTANCE g_hInst = NULL;  // Definition
 
 // Operation mode
 bool isClientMode;
@@ -30,6 +31,8 @@ wchar_t const* className;
 std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini"; // Build the full INI file path
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
+
+    g_hInst = hInstance;
 
     // Check if the INI file exists
     if (!IniFileExists("SendFSKey.ini")) {
@@ -82,12 +85,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit if Winsock initialization fails
     }
 
-    AllocConsole();
-    freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-    freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
+
   
     if (isClientMode) {
-        SetConsoleTitleW(L"SendFSKey Client");
         // Establish connection at startup for client mode
         if (!establishConnection()) {
             MessageBox(NULL, L"Failed to connect to server. Will exit now.", L"Network Error", MB_ICONERROR | MB_OK);
@@ -103,6 +103,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         wc.hInstance = hInstance;
         wc.lpszClassName = className;
         wc.lpfnWndProc = ClientWindowProc;
+        wc.lpszMenuName = MAKEINTRESOURCE(IDR_CLIENTMENU);
 
         if (!RegisterClass(&wc)) return -1;
 
@@ -117,7 +118,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     }
     else if (!isClientMode) {
-        SetConsoleTitleW(L"SendFSKey Server");
         if (!initializeServer()) {
             MessageBox(NULL, L"Could not start server. Port is probably busy or not enough permissions.", L"Network Error", MB_ICONERROR | MB_OK);
             return -1;  // This return should happen regardless of the DEBUG flag's state
@@ -132,6 +132,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         ws.hInstance = hInstance;
         ws.lpszClassName = className;
         ws.lpfnWndProc = ServerWindowProc;
+        ws.lpszMenuName = MAKEINTRESOURCE(IDC_SENDFSKEY_SERVER);
 
         if (!RegisterClass(&ws)) return -1;
 
@@ -200,6 +201,25 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     return (int)msg.wParam; // Return the exit code
 }
 
+INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
 // Implement the dialog procedure function
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
@@ -248,7 +268,22 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-
+    case WM_COMMAND: {
+        int wmId = LOWORD(wp);
+        switch (wmId) {
+        case IDD_ABOUTBOX:
+            DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutDlgProc);
+            break;
+        case IDM_ENABLE_CONSOLE:
+            ToggleConsoleVisibility(L"SendFSKey Client Console");
+            break;
+        case IDM_RESET_SETTINGS:
+            DeleteIniFileAndRestart();
+            break;
+            // Add cases for other menu items...
+        }
+        break;
+    }
     case WM_SYSKEYDOWN: {
         // Extract the scan code from LPARAM
         UINT scanCode = (lp >> 16) & 0x00ff;
@@ -316,11 +351,27 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_COMMAND: {
+        int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
+        switch (wmId) {
+        case IDD_ABOUTBOX:
+            DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutDlgProc);
+            break;
+        case IDM_ENABLE_CONSOLE:
+            ToggleConsoleVisibility(L"SendFSKey Server Console");
+            break;
+        case IDM_RESET_SETTINGS:
+            DeleteIniFileAndRestart();
+            break;
+            // Add additional cases for other menu commands here
+        }
+        break; // End of WM_COMMAND
+    }
     case WM_DESTROY:
         PostQuitMessage(0); // Signal to end the application
-        break; // Return 0 to indicate message has been handled
+        break;
     default:
         return DefWindowProc(hWnd, msg, wp, lp); // Default message processing
     }
-    return 0; // Include a return statement here as good practice (though typically not reached)
+    return 0; // Include a return statement here as good practice
 }

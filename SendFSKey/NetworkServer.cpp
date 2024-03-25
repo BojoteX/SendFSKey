@@ -1,6 +1,5 @@
-#include <ws2tcpip.h>
 #include <thread>
-#include "Globals.h"
+#include <ws2tcpip.h>
 #include "NetworkServer.h"
 
 std::atomic<bool> serverRunning;
@@ -157,8 +156,8 @@ void startServer() {
     serverRunning = true;
 
     // Start monitoring in a separate thread
-    std::thread monitorThread(MonitorFlightSimulatorProcess);
-    monitorThread.detach(); // Detach the thread to run independently
+    if (isFlightSimulatorRunning())
+        MonitorFlightSimulatorProcess();
 
     // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
     while (serverRunning) {

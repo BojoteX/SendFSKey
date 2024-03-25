@@ -8,10 +8,12 @@ extern std::wstring mode;
 extern std::wstring serverIP;
 extern int port;
 extern HWND hEdit;
+extern HINSTANCE g_hInst;
 
 // To use from anywhere
 void sendKeyPress(UINT keyCode, bool isKeyDown);
 void MonitorFlightSimulatorProcess();
+bool isFlightSimulatorRunning();
 
 // To be abble to output to our window with the proper format
 std::wstring FormatForDisplay(const std::string& data);

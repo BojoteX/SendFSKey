@@ -3,12 +3,11 @@
 #include <shlobj.h>
 #include <fstream>
 #include <TlHelp32.h>
-
-std::atomic<bool> isFlightSimulatorRunning(false);
+#include "Globals.h"
 
 // Settings
-std::wstring mode;
-std::wstring serverIP;
+std::wstring mode = L"Server";
+std::wstring serverIP = L"0.0.0.0";
 int port = 8028;
 
 // Function to get the %appdata%/Local/SendFSKey directory path
@@ -110,40 +109,119 @@ UINT getKey(UINT keyCodeNum) {
     return keyCodeNum;
 }
 
-void MonitorFlightSimulatorProcess() {
+bool isFlightSimulatorRunning() {
     const wchar_t* flightSimulatorExe = L"FlightSimulator.exe";
+    PROCESSENTRY32 entry;
+    entry.dwSize = sizeof(PROCESSENTRY32);
 
-    while (true) {
-        bool found = false;
-        PROCESSENTRY32 entry;
-        entry.dwSize = sizeof(PROCESSENTRY32);
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
 
-        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-        if (Process32First(snapshot, &entry)) {
-            do {
-                if (!_wcsicmp(entry.szExeFile, flightSimulatorExe)) {
-                    found = true;
-                    break;
-                }
-            } while (Process32Next(snapshot, &entry));
-        }
-
-        CloseHandle(snapshot);
-
-        isFlightSimulatorRunning = found;
-
-        if (!found) {
-            // Flight Simulator is not running; initiate shutdown procedure
-            MessageBoxA(NULL, "Flight Simulator is not running, will now exit.", "Error", MB_ICONERROR);
-
-            // Cleanup
-            shutdownServer();
-
-            exit(0); // or a graceful shutdown method for your application
-        }
-
-        // Sleep for a bit before checking again
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+    bool found = false;
+    if (Process32First(snapshot, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, flightSimulatorExe) == 0) {
+                found = true;
+                break;
+            }
+        } while (Process32Next(snapshot, &entry));
     }
+    CloseHandle(snapshot);
+    return (found);
+}
+
+void MonitorFlightSimulatorProcess() {
+    // Flight Simulator is running, start monitoring
+    std::thread([]() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            if (!isFlightSimulatorRunning()) {
+                // Flight Simulator is not running; initiate shutdown procedure
+                MessageBoxA(NULL, "Flight Simulator is NOT running, will now exit.", "Error", MB_ICONERROR);
+
+                // Cleanup
+                shutdownServer();
+
+                // Exit application
+                PostQuitMessage(0); // Or use a graceful shutdown method suitable for your application
+                break;
+            }
+        }
+        }).detach(); // Detach the thread to allow it to run independently
+}
+
+void ToggleConsoleVisibility(const std::wstring& title) {
+    HWND consoleWindow = GetConsoleWindow();
+    if (consoleWindow == NULL) {
+        // No console attached, try to create one
+        if (AllocConsole()) {
+            // Set console title using the passed title argument
+            SetConsoleTitleW(title.c_str());
+            // Redirect std input/output streams to the new console
+            freopen_s((FILE**)stdin, "CONIN$", "r", stdin);
+            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+            freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
+            consoleWindow = GetConsoleWindow();
+            ShowWindow(consoleWindow, SW_SHOW); // Ensure the new console window is shown
+        }
+    }
+    else {
+        // Toggle visibility based on current status
+        bool isVisible = ::IsWindowVisible(consoleWindow) != FALSE;
+        ShowWindow(consoleWindow, isVisible ? SW_HIDE : SW_SHOW);
+    }
+}
+
+void RestartApplication() {
+    wchar_t szPath[MAX_PATH];
+    if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath)) != 0) {
+        // Launch the application again
+        SHELLEXECUTEINFO sei = { sizeof(sei) };
+        sei.fMask = SEE_MASK_NOASYNC;
+        sei.lpVerb = L"open";
+        sei.lpFile = szPath;
+        sei.nShow = SW_SHOWNORMAL;
+
+        if (!ShellExecuteEx(&sei)) {
+            DWORD error = GetLastError();
+            MessageBox(NULL, L"Failed to restart the application.", L"Error", MB_ICONERROR | MB_OK);
+            return;
+        }
+
+        // Close the current instance
+        exit(0);
+    }
+    else {
+        MessageBox(NULL, L"Failed to obtain application path.", L"Error", MB_ICONERROR | MB_OK);
+    }
+}
+
+bool ConfirmResetAndRestart() {
+    int response = MessageBox(NULL,
+        L"Reset settings and restart the application?",
+        L"Confirm Reset",
+        MB_ICONQUESTION | MB_YESNO);
+    return (response == IDYES);
+}
+
+void DeleteIniFileAndRestart() {
+    // Prompt the user for confirmation
+    if (!ConfirmResetAndRestart()) {
+        return; // User did not confirm, exit the function
+    }
+
+    std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini";
+
+    // Check if the file exists
+    if (IniFileExists("SendFSKey.ini")) {
+        // Delete the file
+        if (!DeleteFileW(iniPath.c_str())) {
+            DWORD error = GetLastError();
+            MessageBox(NULL, L"Failed to delete the configuration file.", L"Error", MB_ICONERROR | MB_OK);
+            return; // Exit the function if unable to delete the file
+        }
+    }
+
+    // Restart the application
+    RestartApplication();
 }

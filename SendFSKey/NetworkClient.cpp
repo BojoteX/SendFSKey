@@ -1,5 +1,4 @@
 #include <ws2tcpip.h>
-#include "Globals.h"
 #include "NetworkClient.h"
 
 SOCKET g_persistentSocket = INVALID_SOCKET; // Global persistent socket
