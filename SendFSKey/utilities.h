@@ -76,7 +76,7 @@ void AppendTextToConsole(HWND hStatic, const std::wstring& text) {
     std::wstring* pText = new std::wstring(text);
 
     // Post the custom message along with the pointer to the text
-    printf("Posting message to GUI (console)\n");
+    if (DEBUG) printf("Posting message to GUI (console)\n");
     PostMessage(hStatic, WM_APPEND_TEXT_TO_CONSOLE, reinterpret_cast<WPARAM>(pText), 0);
 }
 
@@ -187,23 +187,31 @@ void MonitorFlightSimulatorProcess() {
 
 void ToggleConsoleVisibility(const std::wstring& title) {
     HWND consoleWindow = GetConsoleWindow();
+    std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini";
+
     if (consoleWindow == NULL) {
-        // No console attached, try to create one
+        // No console attached, try to create one and show it
         if (AllocConsole()) {
-            // Set console title using the passed title argument
             SetConsoleTitleW(title.c_str());
-            // Redirect std input/output streams to the new console
             freopen_s((FILE**)stdin, "CONIN$", "r", stdin);
             freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
             freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
-            consoleWindow = GetConsoleWindow();
-            ShowWindow(consoleWindow, SW_SHOW); // Ensure the new console window is shown
+
+            if(isClientMode)
+                printf("\n[CLIENT CONSOLE ENABLED]\n\n");
+            else
+                printf("\n[SERVER CONSOLE ENABLED]\n\n");
+
+            // Update INI to reflect console is now visible
+            WritePrivateProfileStringW(L"Settings", L"ConsoleVisibility", L"Yes", iniPath.c_str());
         }
     }
     else {
-        // Toggle visibility based on current status
+        // Toggle visibility
         bool isVisible = ::IsWindowVisible(consoleWindow) != FALSE;
         ShowWindow(consoleWindow, isVisible ? SW_HIDE : SW_SHOW);
+        // Update INI to reflect the new visibility state
+        WritePrivateProfileStringW(L"Settings", L"ConsoleVisibility", isVisible ? L"No" : L"Yes", iniPath.c_str());
     }
 }
 

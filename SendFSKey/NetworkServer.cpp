@@ -53,7 +53,7 @@ std::wstring getServerIPAddress() {
     }
 
     freeaddrinfo(res); // Free the memory allocated by getaddrinfo
-    wprintf(L"Obtained IP address %s.\n", ipAddress.c_str());
+    wprintf(L"Your server IP address is %s.\n", ipAddress.c_str());
     return ipAddress;
 }
 
@@ -105,16 +105,7 @@ void handleClient(SOCKET clientSocket) {
 
 void startServer() {
 
-    printf("Trying to start server.\n");
-
-    // Start monitoring in a separate thread
-    if (isFlightSimulatorRunning()) {
-        MonitorFlightSimulatorProcess();
-        printf("Will monitor the MSFS process so that when it closes, we also close SendFSKey.\n");
-    }
-    else {
-		printf("MSFS is not running, so we will not monitor it.\n");
-	}
+    printf("Trying to start server...\n");
 
     // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
     std::thread([]() {
@@ -133,7 +124,7 @@ void startServer() {
             // Use inet_ntop correctly
             char clientIPStr[INET_ADDRSTRLEN]; // Buffer where the IP string will be stored
             if (inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIPStr, INET_ADDRSTRLEN) == NULL) {
-                printf("Failed to convert IP address.\n");
+                if (DEBUG) printf("Failed to convert IP address.\n");
                 continue;
             }
 
@@ -153,7 +144,13 @@ void startServer() {
             serverThread.detach(); // Detach the thread to handle the client independently
         }
     }).detach(); // Detach the thread since we don't need to join it.
-    printf("Server process started on a new thread.\n");
+    printf("Server is now running. Ready to accept connections.\n");
+
+    // Start monitoring in a separate thread
+    if (isFlightSimulatorRunning()) {
+        MonitorFlightSimulatorProcess();
+        printf("Will monitor the MSFS process so that when it closes, we also close SendFSKey.\n");
+    }
 }
 
 // This function is called in a separate thread to start the server and avoid blocking the main thread
@@ -193,11 +190,11 @@ bool initializeServer() {
     }
 
     // If we reached this point, the server is up and running so we set the flag to true and start the server
-    printf("Setting atomic serverRunning to true\n");
+    if (DEBUG) printf("Setting atomic serverRunning to true\n");
     serverRunning = true;
 
     // We start the server in a separate thread to avoid blocking the main thread
-    printf("Starting server on a separate thread to avoid GUI blocking\n");
+    if (DEBUG) printf("Starting server on a separate thread to avoid GUI blocking\n");
     startServer();
 
     return true;

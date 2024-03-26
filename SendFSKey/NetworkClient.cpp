@@ -23,13 +23,13 @@ bool verifyServerSignature(SOCKET serverSocket) {
     if (bytesReceived > 0) {
         receivedSignature[bytesReceived] = '\0'; // Null-terminate the received string
         if (strcmp(receivedSignature, EXPECTED_SERVER_SIGNATURE) == 0) {
-            printf("Signature match.\n");
+            if (DEBUG) printf("Signature match.\n");
             return true; // Signature matches
         }
         else {
             closesocket(serverSocket); // Signature does not match, close the connection
             WSACleanup();
-            printf("Incorrect signature.\n");
+            if (DEBUG) printf("Incorrect signature.\n");
             return false;
         }
     }
@@ -50,13 +50,13 @@ bool establishConnection() {
         // Initiate the connection attempt in a new thread only if no active socket was found.
         if (establishConnectionAsync()) {
             // Connection successful
-            printf("Connection successfully established or already connected.\n");
+            printf("Connection established.\n");
             // Update GUI to show connection successful, ensuring to do so in a thread-safe manner.
             std::wstring finalMessage = L"Connection successfully established or already connected.\r\n";
         }
         else {
             // Connection failed
-            printf("Failed to establish connection. Send also to GUI\n");
+            printf("Failed to establish connection.\n");
             // Update GUI to show connection failed, ensuring to do so in a thread-safe manner.
             std::wstring finalMessage = L"Failed to establish connection.\n";
         }
@@ -120,8 +120,7 @@ bool establishConnectionAsync() {
 
         if (so_error == 0) {
             // Connection successful
-            printf("Connected.\n");
-            AppendTextToConsole(hStaticDisplay, L"Connected.\r\n");
+            AppendTextToConsole(hStaticClient, L"Connected.\r\n");
 
             // Set socket back to blocking mode
             mode = 0;
@@ -129,7 +128,7 @@ bool establishConnectionAsync() {
 
             // Verify server signature
             if (!verifyServerSignature(g_persistentSocket)) {
-                printf("Could not verify server signature.\n");
+                if (DEBUG) printf("Could not verify server signature.\n");
                 closesocket(g_persistentSocket);
                 g_persistentSocket = INVALID_SOCKET;
                 return false;

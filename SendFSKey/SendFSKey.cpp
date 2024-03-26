@@ -7,14 +7,20 @@
 #include "NetworkServer.h"
 #include "Resource.h"
 
+// Only define DEBUG if you want to see debug messages
+bool DEBUG = FALSE;
+
 HINSTANCE g_hInst = NULL;  // Definition
 HWND hStaticServer = NULL; // Handle to your server edit control
-HWND hStaticDisplay = NULL; // Handle to your client edit control
+HWND hStaticClient = NULL; // Handle to your client edit control
+std::wstring consoleVisibility;
 
+// Default values for the client and server Windows
 int DEFAULT_WIDTH = 560;
 int DEFAULT_HEIGHT = 155;
 int FONT_SIZE = 18;
 
+// Function prototypes
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -23,6 +29,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 // Operation mode
 bool isClientMode;
 
+// Message loop
 MSG msg = { 0 };
 
 // App Window Initialization
@@ -90,13 +97,16 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     // Show the console window, all messages before console is open display MessageBox. We can later conditionally check our ini file to see if we start the console window or not.
     // From now on we can use printf to output to the console window.
 
+    // Assume iniPath is already defined and holds the path to your INI file
+    wchar_t visibilityBuffer[5]; // Enough for "true" or "false"
+    GetPrivateProfileStringW(L"Settings", L"ConsoleVisibility", L"Yes", visibilityBuffer, 5, iniPath.c_str());
+    std::wstring consoleVisibility = visibilityBuffer;
+
     if (isClientMode) {
-		ToggleConsoleVisibility(L"SendFSKey - Client Console");
-        printf("Client Console enabled.\n");
+        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Client Console");
 	}
     else {
-        ToggleConsoleVisibility(L"SendFSKey - Server Console");
-        printf("Server Console enabled.\n");
+        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Server Console");
     }
 
     // Initialize Winsock for both client and server
@@ -142,7 +152,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
 
         // Create a static control for displaying text (replaces the edit control).
-        HWND hStaticDisplay = CreateWindowEx(
+        HWND hStaticClient = CreateWindowEx(
             0,                  // No extended window styles.
             L"STATIC",          // STATIC control class.
             L"",                // Initial text - this will be changed dynamically.
@@ -158,7 +168,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         );
 
         // Check if the static control was created successfully.
-        if (!hStaticDisplay) {
+        if (!hStaticClient) {
             return -1; // Handle static control creation failure.
         }
 
@@ -180,7 +190,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             L"Segoe UI"       // Font typeface name.
         );
 
-        SendMessage(hStaticDisplay, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
+        SendMessage(hStaticClient, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
         
         // Async connection attempt
         if (!establishConnection()) {
@@ -192,7 +202,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		}
 
         // This is our window loop for the client
-        wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
+        if(DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -292,17 +302,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             finalMessage += L"using port: " + std::to_wstring(port) + L".\n";
             finalMessage += L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\n";
             finalMessage += L"\n";
+            AppendTextToConsole(hStaticServer, L"Connected.\r\n"); //
 
             // Start the server
             if (!initializeServer())
                 MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-            else
-                MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
-
 		}
 
         // This is the server window loop
-        wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the server GUI.\n");
+        if (DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the server GUI.\n");
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -321,6 +329,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
     else {
         // For server mode, insert cleanup operations here
+        serverRunning = false;
         wprintf(L"Closing server connection\n");
         cleanupServer();
     }
@@ -402,7 +411,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         if (pText) {
             // Do the actual UI update here
-            SetWindowText(hStaticDisplay, pText->c_str());
+            SetWindowText(hStaticClient, pText->c_str());
 
             // Don't forget to delete the allocated memory to avoid memory leaks
             delete pText;
@@ -424,7 +433,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         int height = HIWORD(lp) - 2 * padding;
 
         // Resize and reposition the control
-        MoveWindow(hStaticDisplay, padding, padding, width, height, TRUE);
+        MoveWindow(hStaticClient, padding, padding, width, height, TRUE);
     }
     break;
     case WM_COMMAND: {
@@ -495,6 +504,13 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
             break;
     }
+    case WM_CLOSE: {
+        closeClientConnection(); // For client;
+        cleanupWinsock();
+        // Destroy the window to close it
+        DestroyWindow(hWnd);
+        return 0; // Indicate that we handled the message
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -512,7 +528,7 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         if (pText) {
             // Do the actual UI update here
-            SetWindowText(hStaticDisplay, pText->c_str());
+            SetWindowText(hStaticClient, pText->c_str());
 
             // Don't forget to delete the allocated memory to avoid memory leaks
             delete pText;
@@ -562,6 +578,14 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
             break;
+        case WM_CLOSE: {
+            serverRunning = false;
+            cleanupServer();
+            cleanupWinsock();
+            // Destroy the window to close it
+            DestroyWindow(hWnd);
+            return 0; // Indicate that we handled the message
+        }
         case WM_DESTROY:
             PostQuitMessage(0);
             break;

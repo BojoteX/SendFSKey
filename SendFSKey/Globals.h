@@ -1,28 +1,24 @@
 #pragma once
 
-#define WM_APPEND_TEXT_TO_CONSOLE (WM_USER + 1)
-
 #include <string>
 #include <atomic>
 
-// Atomic variables to control the server and client
+#define WM_APPEND_TEXT_TO_CONSOLE (WM_USER + 1)
+
+// My Globals
 extern std::atomic<bool> serverRunning;
-
-// Function to append text to the console
-extern void AppendTextToConsole(HWND hStatic, const std::wstring& text); // New version of the function
-
+extern bool DEBUG;
 extern std::wstring mode;
 extern std::wstring serverIP;
 extern std::wstring serverIPconf;
 extern int port;
 extern HINSTANCE g_hInst;
 extern HWND hStaticServer;
-extern HWND hStaticDisplay;
-
-// Operation mode
+extern HWND hStaticClient;
 extern bool isClientMode;
 
 // To use from anywhere
+void AppendTextToConsole(HWND hStatic, const std::wstring& text);
 void MonitorFlightSimulatorProcess();
 bool isFlightSimulatorRunning();
 std::wstring getServerIPAddress();
