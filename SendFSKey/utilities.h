@@ -86,6 +86,8 @@ std::wstring FormatForDisplay(const std::string& data) {
 
 UINT getKey(UINT keyCodeNum) {
 
+    // This functionality is CRITICAL and should NEVER be removed
+    
     if (keyCodeNum == VK_SHIFT) {
         if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
             keyCodeNum = 160;

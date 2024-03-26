@@ -11,8 +11,8 @@ HINSTANCE g_hInst = NULL;  // Definition
 HWND hStaticServer = NULL; // Handle to your server edit control
 HWND hStaticDisplay = NULL; // Handle to your client edit control
 
-int DEFAULT_WIDTH = 600;
-int DEFAULT_HEIGHT = 200;
+int DEFAULT_WIDTH = 570;
+int DEFAULT_HEIGHT = 160;
 int FONT_SIZE = 18;
 
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);

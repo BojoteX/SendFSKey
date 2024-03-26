@@ -68,7 +68,7 @@ UINT KeyRelease(UINT KeyCode) {
     return 1;
 }
 
-UINT SendKeyWithScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
+UINT SendDOWNKeyWithScanCode(UINT virtualKeyCode) {
     UINT scanCode = MapVirtualKey(virtualKeyCode, MAPVK_VK_TO_VSC);
     INPUT ip = {};
 
@@ -81,19 +81,34 @@ UINT SendKeyWithScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
         ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
     }
 
-    if (!isKeyDown) {
-        // If it's a key release, add KEYEVENTF_KEYUP
-        ip.ki.dwFlags |= KEYEVENTF_KEYUP;
+    SendInput(1, &ip, sizeof(INPUT));
+
+    printf("[KEY_DOWN]* SendInput SCAN_CODE (%u) \n", virtualKeyCode);
+    if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
+
+    return 1;
+}
+
+UINT SendUPKeyWithScanCode(UINT virtualKeyCode) {
+    UINT scanCode = MapVirtualKey(virtualKeyCode, MAPVK_VK_TO_VSC);
+    INPUT ip = {};
+
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.wScan = scanCode;
+    ip.ki.dwFlags = KEYEVENTF_SCANCODE;
+
+    // Check if the key is an extended key
+    if (virtualKeyCode == VK_RMENU || virtualKeyCode == VK_RCONTROL || virtualKeyCode == VK_INSERT) {
+        ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
     }
+
+    // If it's a key release, add KEYEVENTF_KEYUP
+    ip.ki.dwFlags |= KEYEVENTF_KEYUP;
 
     SendInput(1, &ip, sizeof(INPUT));
 
-    if (isKeyDown)
-        printf("[KEY_DOWN] SendInput SCAN_CODE (%u) \n", virtualKeyCode);
-        if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
-    else
-        printf("[KEY_UP] SendInput SCAN_CODE (%u) \n", virtualKeyCode);
-        if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
+    printf("[KEY_UP]* SendInput SCAN_CODE (%u) \n", virtualKeyCode);
+    if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
 
     return 1;
 }
@@ -132,7 +147,7 @@ UINT SendKeyPressDOWN(UINT KeyCode) {
     BringWindowToForegroundByClassName(MSFSclassName);
 
     if (USE_SCAN_CODE) {
-        SendKeyWithScanCode(KeyCode, 1); // 1 Means KEY_DOWN
+        SendDOWNKeyWithScanCode(KeyCode);
     }
     else {
         INPUT ip = { 0 };
@@ -155,6 +170,13 @@ UINT SendKeyPressUP(UINT KeyCode) {
 
     if (EXTENDED_DEBUG) printf("[SWITCH CASE] Received: %u\n", KeyCode);
 
+    if (USE_SCAN_CODE) {
+        SendUPKeyWithScanCode(KeyCode);
+    }
+    else {
+        SendKeyWithoutScanCode(KeyCode, 0); // 1 Means KEY_DOWN and 0 Means KEY_UP
+    }
+    
     // Assuming KeyCode is an array or vector that can hold multiple key codes.
     std::set<UINT> keyCodes;
 
@@ -198,13 +220,12 @@ UINT SendKeyPressUP(UINT KeyCode) {
         printf("[VECTOR] -BEGIN- block\n");
         if (USE_SCAN_CODE) {
             for (UINT keyCode : keyCodes) {
-                SendKeyWithScanCode(keyCode, FALSE); // FALSE for key release
-                printf("[KEY_UP] SendInput SCAN_CODE (%u) \n", keyCode);
+                SendUPKeyWithScanCode(keyCode);
             }
         }
         else {
             for (UINT keyCode : keyCodes) {
-                SendKeyWithoutScanCode(keyCode, FALSE); // FALSE for key release
+                SendKeyWithoutScanCode(keyCode, 0); // 0 for key release
                 printf("[KEY_UP] SendInput VK_MODE (%u) \n", keyCode);
             }
         }
@@ -212,14 +233,6 @@ UINT SendKeyPressUP(UINT KeyCode) {
     }
     else {
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] No modification was needed: %u\n", KeyCode);
-    }
-
-
-    if (USE_SCAN_CODE) {
-        SendKeyWithScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN and 0 Means KEY_UP
-    }
-    else {
-        SendKeyWithoutScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN and 0 Means KEY_UP
     }
 
     if (EXTENDED_DEBUG) {
