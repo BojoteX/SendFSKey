@@ -7,12 +7,13 @@ extern std::atomic<bool> serverRunning;
 extern std::wstring mode;
 extern std::wstring serverIP;
 extern int port;
-extern HWND hEdit;
 extern HINSTANCE g_hInst;
+extern HWND hStaticServer;
+extern HWND hStaticDisplay;
 
 // To use from anywhere
 void sendKeyPress(UINT keyCode, bool isKeyDown);
-void AppendTextToConsole(HWND, const wchar_t* text);
+void AppendTextToConsole(HWND hEdit, const wchar_t* text);
 void MonitorFlightSimulatorProcess();
 bool isFlightSimulatorRunning();
 std::wstring getServerIPAddress();

@@ -8,8 +8,12 @@
 #include "Resource.h"
 
 HINSTANCE g_hInst = NULL;  // Definition
-HWND hEdit = NULL; // Handle to your server edit control
-HWND hEditClient = NULL; // Handle to your client edit control
+HWND hStaticServer = NULL; // Handle to your server edit control
+HWND hStaticDisplay = NULL; // Handle to your client edit control
+
+int DEFAULT_WIDTH = 600;
+int DEFAULT_HEIGHT = 200;
+int FONT_SIZE = 18;
 
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -99,30 +103,71 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         wc.lpszClassName = className;
         wc.lpfnWndProc = ClientWindowProc;
         wc.lpszMenuName = MAKEINTRESOURCE(IDR_CLIENTMENU);
+        wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
         if (!RegisterClass(&wc)) return -1;
 
         // Main Client Window
-        HWND hWndClient = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            100, 100, 800, 600, nullptr, nullptr, hInstance, nullptr);
+        HWND hWndClient = CreateWindowEx(
+            0,                // No extended window styles.
+            className,        // Pointer to registered class name.
+            windowName,       // Pointer to window name.
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
+            CW_USEDEFAULT,    // Use the system's default horizontal position.
+            CW_USEDEFAULT,    // Use the system's default vertical position.
+            DEFAULT_WIDTH,    // Use the system's default width.
+            DEFAULT_HEIGHT,    // Use the system's default height.
+            nullptr,          // No parent window.
+            nullptr,          // Use the class menu.
+            hInstance,        // Handle to application instance.
+            nullptr           // No additional window data.
+        );
 
-        // Create an edit control for the client window
-        if (hWndClient) {
-            hEditClient = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndClient, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
-            if (hEditClient) {
-                HFONT hFont = CreateFont(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-                SendMessage(hEditClient, WM_SETFONT, (WPARAM)hFont, TRUE);
+        // Check if the Main Client Window was created successfully.
+        if (!hWndClient) {
+            return -1; // Handle main window creation failure.
+        }
 
-                // Scroll to the bottom
-                SendMessage(hEditClient, EM_SCROLLCARET, 0, 0);
-            }
-            else {
-                // Handle edit control creation failure
-            }
+        // Create a static control for displaying text (replaces the edit control).
+        HWND hStaticDisplay = CreateWindowEx(
+            0,                  // No extended window styles.
+            L"STATIC",          // STATIC control class.
+            L"",                // Initial text - this will be changed dynamically.
+            WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles.
+            8,                 // x-coordinate of the upper-left corner.
+            8,                 // y-coordinate of the upper-left corner.
+            DEFAULT_WIDTH,                // Width; adjusted for padding.
+            DEFAULT_HEIGHT,                 // Height; enough for one line of text, adjust as needed.
+            hWndClient,         // Handle to the parent window.
+            (HMENU)IDC_MAIN_DISPLAY, // Control ID, ensure it's unique and doesn't conflict with existing IDs.
+            hInstance,          // Handle to application instance.
+            NULL                // No additional window data.
+        );
+
+        // Check if the static control was created successfully.
+        if (!hStaticDisplay) {
+            return -1; // Handle static control creation failure.
         }
-        else {
-            if (!hWndClient) return -1;
-        }
+
+        // Set the font for the static control to the modern Segoe UI.
+        HFONT hFontStatic = CreateFont(
+            FONT_SIZE,        // Font height.
+            0,                // Average character width.
+            0,                // Angle of escapement.
+            0,                // Base-line orientation angle.
+            FW_NORMAL,        // Font weight.
+            FALSE,            // Italic attribute option.
+            FALSE,            // Underline attribute option.
+            FALSE,            // Strikeout attribute option.
+            DEFAULT_CHARSET,  // Character set identifier.
+            OUT_DEFAULT_PRECIS, // Output precision.
+            CLIP_DEFAULT_PRECIS, // Clipping precision.
+            CLEARTYPE_QUALITY,   // Output quality.
+            VARIABLE_PITCH | FF_SWISS, // Pitch and family.
+            L"Segoe UI"       // Font typeface name.
+        );
+
+        SendMessage(hStaticDisplay, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
 
         // Establish connection at startup for client mode
         if (!establishConnection()) {
@@ -130,9 +175,16 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             // return -1;
         }
         else {
-            // Converting wstringstream to wstring
-            std::wstring finalMessage = L"Connected to server\n";
-            AppendTextToConsole(hEditClient, finalMessage.c_str());
+
+            std::wstring serverIP = getServerIPAddress();
+            // Display the server IP address and port in the console
+
+            std::wstring finalMessage = L"SendFSKey v1.0 - by Jesus \"Bojote\" Altuve - Free to use and distribute\r\n";
+            finalMessage += L"\n";
+            finalMessage += L"Successfully connected to Flight Simulator computer.\n";
+            finalMessage += L"Keys will only be sent if this window is targeted or in focus.\n";
+
+            AppendTextToConsole(hStaticDisplay, finalMessage.c_str());
         }
 
         // This is our window loop for the client
@@ -154,34 +206,89 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         ws.lpszClassName = className;
         ws.lpfnWndProc = ServerWindowProc;
         ws.lpszMenuName = MAKEINTRESOURCE(IDC_SENDFSKEY_SERVER);
+        ws.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
         if (!RegisterClass(&ws)) return -1;
 
         // Main Server Window
-        HWND hWndServer = CreateWindowEx(0, className, windowName, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 780, 580, NULL, NULL, hInstance, NULL);
+        HWND hWndServer = CreateWindowEx(
+            0,                // Extended window styles.
+            className,        // Pointer to registered class name.
+            windowName,       // Pointer to window name.
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
+            CW_USEDEFAULT,    // Use the system's default horizontal position.
+            CW_USEDEFAULT,    // Use the system's default vertical position.
+            DEFAULT_WIDTH,    // Use the system's default width.
+            DEFAULT_HEIGHT,   // Use the system's default height.
+            NULL,             // No parent window.
+            NULL,             // No menu.
+            hInstance,        // Handle to application instance.
+            NULL              // No additional window data.
+        );
 
-        // Create an edit control for the server window
-        if (hWndServer) {
-            hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_READONLY, 10, 10, 780, 580, hWndServer, (HMENU)IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
-            if (hEdit) {
-                HFONT hFont = CreateFont(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-                SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+        // Check if the Main Server Window was created successfully.
+        if (!hWndServer) {
+            return -1; // Handle main window creation failure.
+        }
 
-                // Scroll to the bottom
-                SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
-            }
-            else {
-                // Handle edit control creation failure
-            }
+        // Create a static control for the server window to display messages.
+        HWND hStaticServer = CreateWindowEx(
+            0,                  // No extended window styles.
+            L"STATIC",          // STATIC control class for display.
+            L"",                // Initial text - can be updated dynamically.
+            WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles for text display.
+            8,                 // x-coordinate of the upper-left corner.
+            8,                 // y-coordinate of the upper-left corner.
+            DEFAULT_WIDTH,      // Width of the control; adjusted for padding.
+            DEFAULT_HEIGHT,     // Height of the control; enough for one line of text, adjust as needed.
+            hWndServer,         // Handle to the parent window.
+            (HMENU)IDC_STATIC_SERVER, // Control ID, use a unique identifier.
+            hInstance,          // Handle to the instance.
+            NULL                // No additional window data.
+        );
+
+        // Check if the static control was created successfully.
+        if (!hStaticServer) {
+            return -1; // Handle static control creation failure.
         }
-        else {
-            if (!hWndServer) return -1;
-        }
+
+        // Set the font for the static control to the modern Segoe UI.
+        HFONT hFontStatic = CreateFont(
+            FONT_SIZE,        // Font height.
+            0,                // Average character width.
+            0,                // Angle of escapement.
+            0,                // Base-line orientation angle.
+            FW_NORMAL,        // Font weight.
+            FALSE,            // Italic attribute option.
+            FALSE,            // Underline attribute option.
+            FALSE,            // Strikeout attribute option.
+            DEFAULT_CHARSET,  // Character set identifier.
+            OUT_DEFAULT_PRECIS, // Output precision.
+            CLIP_DEFAULT_PRECIS, // Clipping precision.
+            CLEARTYPE_QUALITY,   // Output quality.
+            VARIABLE_PITCH | FF_SWISS, // Pitch and family.
+            L"Segoe UI"       // Font typeface name.
+        );
+
+        SendMessage(hStaticServer, WM_SETFONT, (WPARAM)hFontStatic, MAKELPARAM(TRUE, 0));
 
         if (!initializeServer()) {
             MessageBox(NULL, L"Could not start server. Port is already being used or server is already running.", L"Network Error", MB_ICONERROR | MB_OK);
             // return -1;  // This return should happen regardless of the DEBUG flag's state
         }
+        else {
+            std::wstring serverIP = getServerIPAddress();
+            // Display the server IP address and port in the console
+
+            std::wstring finalMessage = L"SendFSKey v1.0 - by Jesus \"Bojote\" Altuve - Free to use and distribute\r\n";
+            finalMessage += L"\n";
+            finalMessage += L"Server started successfully on ";
+            finalMessage += L"IP Address: " + serverIP + L", "; // Correct usage of .c_str()
+            finalMessage += L"using port: " + std::to_wstring(port) + L".\n";
+            finalMessage += L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\n";
+            finalMessage += L"\n";
+            AppendTextToConsole(hStaticServer, finalMessage.c_str());
+		}
 
         // This is the server window loop
         while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -274,6 +381,24 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wp;
+        SetBkMode(hdcStatic, TRANSPARENT); // Set background mode to transparent
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE); // Use system button face color
+    }
+    case WM_SIZE:
+    {
+        int padding = 8; // For example, a padding of 0 pixels
+
+        // Get the new width and height of the window
+        int width = LOWORD(lp) - 2 * padding;
+        int height = HIWORD(lp) - 2 * padding;
+
+        // Resize and reposition the control
+        MoveWindow(hStaticDisplay, padding, padding, width, height, TRUE);
+    }
+    break;
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
@@ -285,6 +410,9 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!establishConnection()) {
                 MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
             }
+            else {
+                MessageBox(NULL, L"Connection succesfull", L"Connected", MB_ICONINFORMATION | MB_OK);
+			}
             break;
         }
         case ID_CLIENT_EXIT:
@@ -370,6 +498,23 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wp;
+        SetBkMode(hdcStatic, TRANSPARENT); // Set background mode to transparent
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE); // Use system button face color
+    }
+    case WM_SIZE:
+    {
+        int padding = 8; // For example, a padding of 0 pixels
+
+        // Get the new width and height of the window
+        int width = LOWORD(lp) - 2 * padding;
+        int height = HIWORD(lp) - 2 * padding;
+
+        // Resize and reposition the control
+        MoveWindow(hStaticServer, padding, padding, width, height, TRUE);
+    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {

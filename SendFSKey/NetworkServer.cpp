@@ -195,7 +195,7 @@ void startServer() {
         std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
 
         // PostUpdateToUI(formattedMessage.c_str());
-        AppendTextToConsole(hEdit, formattedMessage.c_str());
+        AppendTextToConsole(hStaticServer, formattedMessage.c_str());
 
         // Send the server signature immediately after accepting the connection
         send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);

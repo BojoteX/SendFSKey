@@ -10,6 +10,8 @@ std::wstring mode = L"Server";
 std::wstring serverIP = L"0.0.0.0";
 int port = 8028;
 
+const size_t MAX_BUFFER_SIZE = 1024 * 10; // 10 KB, adjust as necessary, this is needed for the static control
+
 // Function to get the %appdata%/Local/SendFSKey directory path
 std::wstring GetAppDataLocalSendFSKeyDir() {
     wchar_t appDataPath[MAX_PATH];
@@ -55,17 +57,22 @@ void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
     }
 }
 
-void AppendTextToConsole(HWND hEdit, const wchar_t* text) {
-    // Calculate the new end of the text buffer so we can set the selection
-    // to the end of the text and ensure the newly appended text is visible.
-    int idxEnd = GetWindowTextLength(hEdit);
-    SendMessage(hEdit, EM_SETSEL, (WPARAM)idxEnd, (LPARAM)idxEnd);
+void AppendTextToConsole(HWND hStatic, const wchar_t* text) {
+    static std::wstring currentText; // Holds the existing text to simulate appending
 
-    // Append the text by replacing the current selection (which is nothing at the end of the text)
-    SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)text);
+    // Ensure we don't exceed a reasonable size for the text buffer
+    const size_t MAX_BUFFER_SIZE = 1024 * 10; // Example size, adjust as needed
+    if (currentText.length() + wcslen(text) < MAX_BUFFER_SIZE) {
+        currentText += text; // Append new text
 
-    // Scroll to the end of the text
-    SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
+        // Set the full text to the static control
+        SetWindowText(hStatic, currentText.c_str());
+    }
+    else {
+        // Optional: Handle overflow, e.g., clear the buffer or remove the oldest text
+        currentText = text; // Simplest overflow handling: start fresh with the latest text
+        SetWindowText(hStatic, currentText.c_str());
+    }
 }
 
 std::wstring FormatForDisplay(const std::string& data) {
@@ -225,23 +232,7 @@ void DeleteIniFileAndRestart() {
 
 bool ServerStart() {
 	// Initialize the server
-    std::wstring serverIP = getServerIPAddress();
 
-    // Concatenating strings and variables
-    std::wstringstream ws;
-    ws << L"SendFSKey v1.0 - Copyright(c) 2024 by Jesus \"Bojote\" Altuve\r\n";
-    ws << L"\r\n";
-    ws << L"Server started successfully on ";
-    ws << L"IP Address: " << serverIP.c_str() << L", "; // Correct usage of .c_str()
-    ws << L"using port: " << port << L".\r\n";
-    ws << L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\r\n";
-    ws << L"\r\n";
-
-    // Converting wstringstream to wstring
-    std::wstring finalMessage = ws.str();
-    AppendTextToConsole(hEdit, finalMessage.c_str());
-
-    // Just before starting the UI look we spawnn our thread and detach it
     std::thread ServerThread(startServer);
     ServerThread.detach(); // Detach the thread to handle the client independently
 

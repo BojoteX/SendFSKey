@@ -34,6 +34,8 @@
 #define ID_CLIENT_EXIT                  32781
 #define ID_CLIENT_CONNECT               32782
 #define ID_SERVER_CONNECT               32783
+#define IDC_MAIN_DISPLAY				32784
+#define IDC_STATIC_SERVER				32785
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

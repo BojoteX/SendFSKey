@@ -195,20 +195,25 @@ UINT SendKeyPressUP(UINT KeyCode) {
     if (found) {
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] Iterated the array for KeyReleases above\n");
 
+        printf("[VECTOR] -BEGIN- block\n");
         if (USE_SCAN_CODE) {
             for (UINT keyCode : keyCodes) {
                 SendKeyWithScanCode(keyCode, FALSE); // FALSE for key release
+                printf("[KEY_UP] SendInput SCAN_CODE (%u) \n", keyCode);
             }
         }
         else {
             for (UINT keyCode : keyCodes) {
                 SendKeyWithoutScanCode(keyCode, FALSE); // FALSE for key release
+                printf("[KEY_UP] SendInput VK_MODE (%u) \n", keyCode);
             }
         }
+        printf("[VECTOR] -END- block\n");
     }
     else {
         if (EXTENDED_DEBUG) printf("[SWITCH CASE] No modification was needed: %u\n", KeyCode);
     }
+
 
     if (USE_SCAN_CODE) {
         SendKeyWithScanCode(KeyCode, FALSE); // 1 Means KEY_DOWN and 0 Means KEY_UP
