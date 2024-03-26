@@ -81,23 +81,25 @@ void AppendTextToConsole(HWND hStatic, const std::wstring& text) {
 }
 
 void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
+
     if (isKeyDown) {
-        printf("\n[KEY_DOWN] DETECTED from Client Keyboard: (%d)", keyCodeNum);
+        printf("\n* [KEY_DOWN] DETECTED from Client Keyboard: (%d)", keyCodeNum);
     }
     else {
-        printf("\n[KEY_UP] DETECTED from Client Keyboard: (%d)", keyCodeNum);
+        printf("* [KEY_UP] DETECTED from Client Keyboard: (%d)", keyCodeNum);
     }
 
     if (isSystemKey)
-        printf(" as a SYSTEM key\n");
-    else
-        printf("\n");
+        printf(" as a SYSTEM key ");
+    else {
+		printf(" as a STANDARD key ");
+	}
 
     // Attempt to use the mapped key code for KEY_UP events
     if (!isKeyDown && keyDownToUpMapping.find(keyCodeNum) != keyDownToUpMapping.end()) {
         keyCodeNum = keyDownToUpMapping[keyCodeNum]; // Use the converted code
         keyDownToUpMapping.erase(keyCodeNum); // Clean up after use
-        printf("Using converted keyCode for KEY_UP: (%d)\n", keyCodeNum);
+        printf("and converted keyCode for KEY_UP: (%d)", keyCodeNum);
     }
     else if (isKeyDown) {
         // Process conversion only on KEY_DOWN
@@ -130,19 +132,19 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
         // If a conversion occurred, map the original to the converted keycode
         if (originalKeyCode != keyCodeNum) {
             keyDownToUpMapping[originalKeyCode] = keyCodeNum;
-            printf("and is changing it to: (%d)\n", keyCodeNum);
+            printf("and converted to: (%d)", keyCodeNum);
         }
+    }
+
+    if (isKeyDown) {
+        printf("\n[KEY_DOWN] was SENT to Server using keycode: (%d)\n", keyCodeNum);
+    }
+    else {
+        printf("\n[KEY_UP] was SENT to Server using keycode: (%d)\n", keyCodeNum);
     }
 
     // Proceed to send the key press with possibly updated keyCodeNum
     sendKeyPress(keyCodeNum, isKeyDown);
-
-    if (isKeyDown) {
-        printf("\n[KEY_DOWN] SENT to Server: (%d)", keyCodeNum);
-    }
-    else {
-        printf("\n[KEY_UP] SENT to Server: (%d)", keyCodeNum);
-    }
 }
 
 bool isFlightSimulatorRunning() {

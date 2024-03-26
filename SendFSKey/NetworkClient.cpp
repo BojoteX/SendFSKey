@@ -196,12 +196,6 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
             else {
                 char ack;
                 recv(g_persistentSocket, &ack, sizeof(ack), 0); // Await acknowledgment
-
-                // Log the key event
-                if (isKeyDown)
-                    printf("[KEY_DOWN] Sent (%d) \n", keyCode);
-                else
-                    printf("[KEY_UP] Sent (%d) \n", keyCode);
             }
         }
         else {

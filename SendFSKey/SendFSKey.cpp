@@ -482,7 +482,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         UINT scanCode = (lp >> 16) & 0x00ff;
         UINT keyCodeNum = static_cast<UINT>(wp);
 
-        getKey(keyCodeNum, FALSE, FALSE); // Is not system key and is key up
+        getKey(keyCodeNum, TRUE, FALSE); // Is not system key and is key up
 
         break;
     }
