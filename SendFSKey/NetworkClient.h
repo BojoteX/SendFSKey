@@ -3,7 +3,7 @@
 #include "Globals.h"
 
 bool initializeWinsock();
-void sendKeyPress(UINT keyCode, bool isKeyDown);
 void cleanupWinsock();
 bool establishConnection();
+bool establishConnectionAsync();
 void closeClientConnection();

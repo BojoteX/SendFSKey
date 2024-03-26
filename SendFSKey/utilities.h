@@ -3,14 +3,19 @@
 #include <shlobj.h>
 #include <fstream>
 #include <TlHelp32.h>
+#include <unordered_map>
 #include "Globals.h"
 
 // Settings
 std::wstring mode = L"Server";
-std::wstring serverIP = L"0.0.0.0";
+std::wstring serverIPconf = L"0.0.0.0";
 int port = 8028;
 
+// Required for the console window
 const size_t MAX_BUFFER_SIZE = 1024 * 10; // 10 KB, adjust as necessary, this is needed for the static control
+
+// Below are the key codes for the keys that are not standard and required conversion
+std::unordered_map<UINT, UINT> keyDownToUpMapping;
 
 // Function to get the %appdata%/Local/SendFSKey directory path
 std::wstring GetAppDataLocalSendFSKeyDir() {
@@ -57,24 +62,6 @@ void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
     }
 }
 
-void AppendTextToConsole(HWND hStatic, const wchar_t* text) {
-    static std::wstring currentText; // Holds the existing text to simulate appending
-
-    // Ensure we don't exceed a reasonable size for the text buffer
-    const size_t MAX_BUFFER_SIZE = 1024 * 10; // Example size, adjust as needed
-    if (currentText.length() + wcslen(text) < MAX_BUFFER_SIZE) {
-        currentText += text; // Append new text
-
-        // Set the full text to the static control
-        SetWindowText(hStatic, currentText.c_str());
-    }
-    else {
-        // Optional: Handle overflow, e.g., clear the buffer or remove the oldest text
-        currentText = text; // Simplest overflow handling: start fresh with the latest text
-        SetWindowText(hStatic, currentText.c_str());
-    }
-}
-
 std::wstring FormatForDisplay(const std::string& data) {
     // Convert std::string (assumed to be UTF-8 or ASCII) to std::wstring
     std::wstring wideData(data.begin(), data.end());
@@ -84,38 +71,78 @@ std::wstring FormatForDisplay(const std::string& data) {
     return formattedMessage;
 }
 
-UINT getKey(UINT keyCodeNum) {
+void AppendTextToConsole(HWND hStatic, const std::wstring& text) {
+    // Allocate new memory for the text to be sent to the window procedure
+    std::wstring* pText = new std::wstring(text);
 
-    // This functionality is CRITICAL and should NEVER be removed
-    
-    if (keyCodeNum == VK_SHIFT) {
-        if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
-            keyCodeNum = 160;
+    // Post the custom message along with the pointer to the text
+    printf("Posting message to GUI (console)\n");
+    PostMessage(hStatic, WM_APPEND_TEXT_TO_CONSOLE, reinterpret_cast<WPARAM>(pText), 0);
+}
+
+void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
+    if (isKeyDown) {
+        printf("\n[KEY_DOWN] DETECTED from Client Keyboard: (%d)", keyCodeNum);
+    }
+    else {
+        printf("\n[KEY_UP] DETECTED from Client Keyboard: (%d)", keyCodeNum);
+    }
+
+    if (isSystemKey)
+        printf(" as a SYSTEM key\n");
+    else
+        printf("\n");
+
+    // Attempt to use the mapped key code for KEY_UP events
+    if (!isKeyDown && keyDownToUpMapping.find(keyCodeNum) != keyDownToUpMapping.end()) {
+        keyCodeNum = keyDownToUpMapping[keyCodeNum]; // Use the converted code
+        keyDownToUpMapping.erase(keyCodeNum); // Clean up after use
+        printf("Using converted keyCode for KEY_UP: (%d)\n", keyCodeNum);
+    }
+    else if (isKeyDown) {
+        // Process conversion only on KEY_DOWN
+        UINT originalKeyCode = keyCodeNum; // Preserve original keycode
+        if (keyCodeNum == VK_SHIFT) {
+            if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
+                keyCodeNum = 160; // Left Shift
+            }
+            else if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
+                keyCodeNum = 161; // Right Shift
+            }
         }
-        else if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
-            keyCodeNum = 161;
+        else if (keyCodeNum == VK_CONTROL) {
+            if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) {
+                keyCodeNum = 162; // Left Control
+            }
+            else if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) {
+                keyCodeNum = 163; // Right Control
+            }
+        }
+        else if (keyCodeNum == VK_MENU) {
+            if (GetAsyncKeyState(VK_LMENU) & 0x8000) {
+                keyCodeNum = 164; // Left Menu (Alt)
+            }
+            else if (GetAsyncKeyState(VK_RMENU) & 0x8000) {
+                keyCodeNum = 165; // Right Menu (Alt)
+            }
+        }
+
+        // If a conversion occurred, map the original to the converted keycode
+        if (originalKeyCode != keyCodeNum) {
+            keyDownToUpMapping[originalKeyCode] = keyCodeNum;
+            printf("and is changing it to: (%d)\n", keyCodeNum);
         }
     }
 
-    if (keyCodeNum == VK_CONTROL) {
-        if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) {
-            keyCodeNum = 162;
-        }
-        else if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) {
-            keyCodeNum = 163;
-        }
-    }
+    // Proceed to send the key press with possibly updated keyCodeNum
+    sendKeyPress(keyCodeNum, isKeyDown);
 
-    if (keyCodeNum == VK_MENU) {
-        if (GetAsyncKeyState(VK_LMENU) & 0x8000) {
-            keyCodeNum = 164;
-        }
-        else if (GetAsyncKeyState(VK_RMENU) & 0x8000) {
-            keyCodeNum = 165;
-        }
+    if (isKeyDown) {
+        printf("\n[KEY_DOWN] SENT to Server: (%d)", keyCodeNum);
     }
-
-    return keyCodeNum;
+    else {
+        printf("\n[KEY_UP] SENT to Server: (%d)", keyCodeNum);
+    }
 }
 
 bool isFlightSimulatorRunning() {
@@ -191,14 +218,28 @@ void RestartApplication() {
         if (!ShellExecuteEx(&sei)) {
             DWORD error = GetLastError();
             MessageBox(NULL, L"Failed to restart the application.", L"Error", MB_ICONERROR | MB_OK);
+            printf("Failed to restart the application\n");
             return;
         }
 
-        // Close the current instance
+        if (isClientMode) {
+            closeClientConnection(); // For client
+            wprintf(L"Closing client connection\n");
+        }
+        else {
+            // For server mode, insert cleanup operations here
+            wprintf(L"Closing server connection\n");
+            cleanupServer();
+        }
+        wprintf(L"Winsock cleanup and exiting program\n");
+        cleanupWinsock();
+
+        // Exit the current instance of the application gracefully after cleanup
         exit(0);
     }
     else {
         MessageBox(NULL, L"Failed to obtain application path.", L"Error", MB_ICONERROR | MB_OK);
+        wprintf(L"Failed to obtain application path\n");
     }
 }
 
@@ -221,22 +262,15 @@ void DeleteIniFileAndRestart() {
     // Check if the file exists
     if (IniFileExists("SendFSKey.ini")) {
         // Delete the file
+        wprintf(L"Deleting .ini file\n");
         if (!DeleteFileW(iniPath.c_str())) {
             DWORD error = GetLastError();
             MessageBox(NULL, L"Failed to delete the configuration file.", L"Error", MB_ICONERROR | MB_OK);
+            wprintf(L"Failed to delete .ini file\n");
             return; // Exit the function if unable to delete the file
         }
     }
 
     // Restart the application
     RestartApplication();
-}
-
-bool ServerStart() {
-	// Initialize the server
-
-    std::thread ServerThread(startServer);
-    ServerThread.detach(); // Detach the thread to handle the client independently
-
-    return 1;
 }

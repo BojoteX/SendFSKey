@@ -52,10 +52,111 @@ std::wstring getServerIPAddress() {
         }
     }
 
-    freeaddrinfo(res);
+    freeaddrinfo(res); // Free the memory allocated by getaddrinfo
+    wprintf(L"Obtained IP address %s.\n", ipAddress.c_str());
     return ipAddress;
 }
 
+void handleClient(SOCKET clientSocket) {
+
+    // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 4 bytes for keyCode
+    unsigned char buffer[5];
+    while (serverRunning) {
+        ZeroMemory(buffer, sizeof(buffer));
+        // Assuming receiveData is properly defined elsewhere to wrap recv() and return true if data was received
+        int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0);
+        if (bytesReceived <= 0) {
+            printf("Error receiving data or client disconnected.\n");
+            break; // Exit loop on error or disconnection
+        }
+
+        // First byte is the event type
+        char eventType = buffer[0];
+
+        // Next 4 bytes are the keyCode, ensure proper alignment and endianness
+        UINT keyCode;
+        memcpy(&keyCode, buffer + 1, sizeof(keyCode));
+
+        // Potentially handle keyCodes being sent not matching the expected values (e.g. out of range) and not between 0 and 255
+        // For Example, I do not want codes 16, 17 or 18 being sent, but I can't intercept them here as I have no way to know if LEFT or RIGHT extended key was press
+        // for that I need to make this change in the Client while in the loop    
+
+        switch (eventType) {
+        case 'D':
+            printf("\n[KEY_DOWN] RECEIVED FROM CLIENT: (%u)\n", keyCode);
+            ServerKeyPressDOWN(keyCode);
+            break;
+        case 'U':
+            printf("[KEY_UP] RECEIVED FROM CLIENT: (%u)\n", keyCode);
+            ServerKeyPressUP(keyCode);
+            break;
+        default:
+            printf("[UNKNOWN] RECEIVED of type: %c\n", eventType);
+            break; // Optionally, handle unknown event type
+        }
+
+        // Send acknowledgment back to the client
+        char ack = 1;
+        send(clientSocket, &ack, sizeof(ack), 0);
+    }
+    printf("Client socket closed.\n");
+    closesocket(clientSocket); // Clean up the socket
+}
+
+void startServer() {
+
+    printf("Trying to start server.\n");
+
+    // Start monitoring in a separate thread
+    if (isFlightSimulatorRunning()) {
+        MonitorFlightSimulatorProcess();
+        printf("Will monitor the MSFS process so that when it closes, we also close SendFSKey.\n");
+    }
+    else {
+		printf("MSFS is not running, so we will not monitor it.\n");
+	}
+
+    // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
+    std::thread([]() {
+        while (serverRunning) {
+            // Get the IP Address of the connecting client
+            sockaddr_in clientAddr; // Declare the structure to store client address
+            int clientAddrLen = sizeof(clientAddr); // Length of client address
+
+            SOCKET clientSocket = accept(g_listenSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
+
+            if (clientSocket == INVALID_SOCKET) {
+                printf("Failed to accept connection.\n");
+                continue; // Continue to accept the next connection
+            }
+
+            // Use inet_ntop correctly
+            char clientIPStr[INET_ADDRSTRLEN]; // Buffer where the IP string will be stored
+            if (inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIPStr, INET_ADDRSTRLEN) == NULL) {
+                printf("Failed to convert IP address.\n");
+                continue;
+            }
+
+            std::string ipStr(clientIPStr); // Convert char* to std::string
+            std::wstring wideIP(ipStr.begin(), ipStr.end()); // Convert std::string to std::wstring for UI
+
+            std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
+            wprintf(L"Received connection from: %s\n", wideIP.c_str());
+
+            // PostUpdateToUI(formattedMessage.c_str());
+            AppendTextToConsole(hStaticServer, formattedMessage.c_str());
+
+            // Send the server signature immediately after accepting the connection
+            send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
+
+            std::thread serverThread(handleClient, clientSocket);
+            serverThread.detach(); // Detach the thread to handle the client independently
+        }
+    }).detach(); // Detach the thread since we don't need to join it.
+    printf("Server process started on a new thread.\n");
+}
+
+// This function is called in a separate thread to start the server and avoid blocking the main thread
 bool initializeServer() {
 
     WSADATA wsaData;
@@ -91,8 +192,13 @@ bool initializeServer() {
         return false;
     }
 
-    // All set!
-    ServerStart();
+    // If we reached this point, the server is up and running so we set the flag to true and start the server
+    printf("Setting atomic serverRunning to true\n");
+    serverRunning = true;
+
+    // We start the server in a separate thread to avoid blocking the main thread
+    printf("Starting server on a separate thread to avoid GUI blocking\n");
+    startServer();
 
     return true;
 }
@@ -117,92 +223,6 @@ void closeServerConnection(SOCKET clientSocket) {
 
 void cleanupServer() {
     shutdownServer(); // Ensure the server is properly shut down
-}
-
-void handleClient(SOCKET clientSocket) {
-
-    // Adjust the buffer size to exactly fit our data structure: 1 byte for event type + 4 bytes for keyCode
-    unsigned char buffer[5];
-    while (serverRunning) {
-        ZeroMemory(buffer, sizeof(buffer));
-        // Assuming receiveData is properly defined elsewhere to wrap recv() and return true if data was received
-        int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0);
-        if (bytesReceived <= 0) {
-            printf("Error receiving data or client disconnected.\n");
-            break; // Exit loop on error or disconnection
-        }
-
-        // First byte is the event type
-        char eventType = buffer[0];
-
-        // Next 4 bytes are the keyCode, ensure proper alignment and endianness
-        UINT keyCode;
-        memcpy(&keyCode, buffer + 1, sizeof(keyCode));
-
-        switch (eventType) {
-        case 'D':
-            printf("\n[KEY_DOWN] RECEIVED: (%u)\n", keyCode);
-            SendKeyPressDOWN(keyCode);
-            break;
-        case 'U':
-            printf("[KEY_UP] RECEIVED: (%u)\n", keyCode);
-            SendKeyPressUP(keyCode);
-            break;
-        default:
-            printf("[UNKNOWN] RECEIVED of type: %c\n", eventType);
-            break; // Optionally, handle unknown event type
-        }
-
-        // Send acknowledgment back to the client
-        char ack = 1;
-        send(clientSocket, &ack, sizeof(ack), 0);
-    }
-    printf("Client socket closed.\n");
-    closesocket(clientSocket); // Clean up the socket
-}
-
-void startServer() {
-    serverRunning = true;
-
-    // Start monitoring in a separate thread
-    if (isFlightSimulatorRunning())
-        MonitorFlightSimulatorProcess();
-
-    // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
-    while (serverRunning) {
-
-        // Get the IP Address of the connecting client
-        sockaddr_in clientAddr; // Declare the structure to store client address
-        int clientAddrLen = sizeof(clientAddr); // Length of client address
-
-        SOCKET clientSocket = accept(g_listenSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
-
-        if (clientSocket == INVALID_SOCKET) {
-            printf("Failed to accept connection.\n");
-            continue; // Continue to accept the next connection
-        }
-
-        // Use inet_ntop correctly
-        char clientIPStr[INET_ADDRSTRLEN]; // Buffer where the IP string will be stored
-        if (inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIPStr, INET_ADDRSTRLEN) == NULL) {
-            printf("Failed to convert IP address.\n");
-            continue;
-        }
-
-        std::string ipStr(clientIPStr); // Convert char* to std::string
-        std::wstring wideIP(ipStr.begin(), ipStr.end()); // Convert std::string to std::wstring for UI
-
-        std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
-
-        // PostUpdateToUI(formattedMessage.c_str());
-        AppendTextToConsole(hStaticServer, formattedMessage.c_str());
-
-        // Send the server signature immediately after accepting the connection
-        send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
-
-        std::thread serverThread(handleClient, clientSocket);
-        serverThread.detach(); // Detach the thread to handle the client independently
-    }
 }
 
 bool isServerUp() {

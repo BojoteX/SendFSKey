@@ -1,3 +1,4 @@
+#include <thread>
 #include <ws2tcpip.h>
 #include "NetworkClient.h"
 
@@ -10,6 +11,7 @@ SOCKET g_persistentSocket = INVALID_SOCKET; // Global persistent socket
 bool initializeWinsock() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        printf("Error initializing winsock.\n");
         return false;
     }
     return true;
@@ -21,23 +23,55 @@ bool verifyServerSignature(SOCKET serverSocket) {
     if (bytesReceived > 0) {
         receivedSignature[bytesReceived] = '\0'; // Null-terminate the received string
         if (strcmp(receivedSignature, EXPECTED_SERVER_SIGNATURE) == 0) {
+            printf("Signature match.\n");
             return true; // Signature matches
         }
         else {
             closesocket(serverSocket); // Signature does not match, close the connection
             WSACleanup();
+            printf("Incorrect signature.\n");
             return false;
         }
     }
     closesocket(serverSocket); // If no data received, close the connection
     WSACleanup();
+    printf("Closing connection and doing cleanup.\n");
     return false;
 }
 
-// Keep in mind that this function is blocking and should be called from a separate thread
-// also, it should be called only once and verifyServerSignature should be called before
 bool establishConnection() {
-    if (g_persistentSocket != INVALID_SOCKET) return true; // Connection is already established
+    // Initiate the connection attempt in a new thread 
+    if (g_persistentSocket != INVALID_SOCKET) {
+        printf("Connection is already established.\n");
+        return true; // Connection is already established
+    }
+
+    std::thread([]() {
+        // Initiate the connection attempt in a new thread only if no active socket was found.
+        if (establishConnectionAsync()) {
+            // Connection successful
+            printf("Connection successfully established or already connected.\n");
+            // Update GUI to show connection successful, ensuring to do so in a thread-safe manner.
+            std::wstring finalMessage = L"Connection successfully established or already connected.\r\n";
+        }
+        else {
+            // Connection failed
+            printf("Failed to establish connection. Send also to GUI\n");
+            // Update GUI to show connection failed, ensuring to do so in a thread-safe manner.
+            std::wstring finalMessage = L"Failed to establish connection.\n";
+        }
+    }).detach(); // Detach the thread to allow it to run independently
+
+    // Will always return true since the connection attempt is in a separate thread, so don't check the return value here but rather send a message to the GUI
+    // We still return true here to indicate that the connection attempt has been initiated but not necessarily completed yet.
+    return false;
+}
+
+bool establishConnectionAsync() {
+    if (g_persistentSocket != INVALID_SOCKET) {
+        printf("The connection is already established.\n");
+        return true; // Connection is already established
+    }
 
     g_persistentSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (g_persistentSocket == INVALID_SOCKET) {
@@ -53,7 +87,7 @@ bool establishConnection() {
     memset(&serverAddress, 0, sizeof(serverAddress)); // Ensure the structure is empty
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(port);
-    InetPton(AF_INET, serverIP.c_str(), &serverAddress.sin_addr); // Assuming serverIP is std::string
+    InetPton(AF_INET, serverIPconf.c_str(), &serverAddress.sin_addr); // Assuming serverIP.conf is std::string
 
     // Attempt to connect (non-blocking)
     int connectResult = connect(g_persistentSocket, (SOCKADDR*)&serverAddress, sizeof(serverAddress));
@@ -86,7 +120,8 @@ bool establishConnection() {
 
         if (so_error == 0) {
             // Connection successful
-            printf("Connection established.\n");
+            printf("Connected.\n");
+            AppendTextToConsole(hStaticDisplay, L"Connected.\r\n");
 
             // Set socket back to blocking mode
             mode = 0;
@@ -161,11 +196,19 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
             else {
                 char ack;
                 recv(g_persistentSocket, &ack, sizeof(ack), 0); // Await acknowledgment
+
+                // Log the key event
+                if (isKeyDown)
+                    printf("[KEY_DOWN] Sent (%d) \n", keyCode);
+                else
+                    printf("[KEY_UP] Sent (%d) \n", keyCode);
             }
         }
         else {
             MessageBox(NULL, L"Failed to reconnect to server after multiple attempts. Exiting.", L"Network Error", MB_ICONERROR | MB_OK);
+
             cleanupWinsock();
+            printf("Closing connection and doing cleanup before exiting.\n");
             ExitProcess(1); // Terminate application if unable to reconnect after max attempts
         }
     }

@@ -11,8 +11,8 @@ HINSTANCE g_hInst = NULL;  // Definition
 HWND hStaticServer = NULL; // Handle to your server edit control
 HWND hStaticDisplay = NULL; // Handle to your client edit control
 
-int DEFAULT_WIDTH = 570;
-int DEFAULT_HEIGHT = 160;
+int DEFAULT_WIDTH = 560;
+int DEFAULT_HEIGHT = 155;
 int FONT_SIZE = 18;
 
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -46,10 +46,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (DialogBox(hInstance, MAKEINTRESOURCE(IDD_DIALOG1), NULL, SettingsDialogProc) == IDC_OK) {
             // The user clicked OK and the settings have been captured.
-            WriteSettingsToIniFile(mode, serverIP); // Use the global `mode` variable set in the dialog procedure
+            WriteSettingsToIniFile(mode, serverIPconf); // Use the global `mode` variable set in the dialog procedure
         }
         else {
             // The user clicked Cancel or closed the dialog
+            MessageBox(NULL, L"Operation was cancelled.", L"CANCEL", MB_ICONERROR | MB_OK);
             return -1; // Exit the application as no settings have been configured
         }
 
@@ -72,10 +73,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         std::wstring mode = modeBuffer;
         if (mode == L"Client") {
             isClientMode = true;
-            // Read other client-specific settings like serverIP
+            // Read other client-specific settings like serverIPconf
             wchar_t ipBuffer[256];
             GetPrivateProfileStringW(L"Settings", L"IP", L"", ipBuffer, 256, iniPath.c_str());
-            serverIP = ipBuffer;
+            serverIPconf = ipBuffer;
         }
         else if (mode == L"Server") {
             isClientMode = false;
@@ -84,6 +85,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         else {
             MessageBox(NULL, L"Selected mode has not been implemented.", L"Error", MB_ICONERROR | MB_OK);
         }
+    }
+
+    // Show the console window, all messages before console is open display MessageBox. We can later conditionally check our ini file to see if we start the console window or not.
+    // From now on we can use printf to output to the console window.
+
+    if (isClientMode) {
+		ToggleConsoleVisibility(L"SendFSKey - Client Console");
+        printf("Client Console enabled.\n");
+	}
+    else {
+        ToggleConsoleVisibility(L"SendFSKey - Server Console");
+        printf("Server Console enabled.\n");
     }
 
     // Initialize Winsock for both client and server
@@ -168,31 +181,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         );
 
         SendMessage(hStaticDisplay, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
-
-        // Establish connection at startup for client mode
+        
+        // Async connection attempt
         if (!establishConnection()) {
-            MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
-            // return -1;
+            // Get the IP address of the server
+            wprintf(L"Trying to establish a connection to IP Address: %s\n", serverIPconf.c_str());
         }
         else {
-
-            std::wstring serverIP = getServerIPAddress();
-            // Display the server IP address and port in the console
-
-            std::wstring finalMessage = L"SendFSKey v1.0 - by Jesus \"Bojote\" Altuve - Free to use and distribute\r\n";
-            finalMessage += L"\n";
-            finalMessage += L"Successfully connected to Flight Simulator computer.\n";
-            finalMessage += L"Keys will only be sent if this window is targeted or in focus.\n";
-
-            AppendTextToConsole(hStaticDisplay, finalMessage.c_str());
-        }
+            wprintf(L"Connection already established\n");
+		}
 
         // This is our window loop for the client
+        wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-
     }
     else if (!isClientMode) {
 
@@ -272,8 +276,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         SendMessage(hStaticServer, WM_SETFONT, (WPARAM)hFontStatic, MAKELPARAM(TRUE, 0));
 
-        if (!initializeServer()) {
-            MessageBox(NULL, L"Could not start server. Port is already being used or server is already running.", L"Network Error", MB_ICONERROR | MB_OK);
+        if (isServerUp()) {
+            wprintf(L"Could not start server. Port is already in use, restart your computer\n");
+            MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
             // return -1;  // This return should happen regardless of the DEBUG flag's state
         }
         else {
@@ -287,30 +292,40 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             finalMessage += L"using port: " + std::to_wstring(port) + L".\n";
             finalMessage += L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\n";
             finalMessage += L"\n";
-            AppendTextToConsole(hStaticServer, finalMessage.c_str());
+
+            // Start the server
+            if (!initializeServer())
+                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
+            else
+                MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
+
 		}
 
         // This is the server window loop
+        wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the server GUI.\n");
         while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-
     }
     else {
         MessageBoxA(NULL, "Mode not set. Application will now exit.", "Error", MB_ICONERROR);
+        wprintf(L"Application exiting due to invalid input or incorrect ini file\n");
         return -1; // Exit application due to invalid input or incorrect ini file
     }
 
     // Cleanup before exit
     if (isClientMode) {
         closeClientConnection(); // For client
+        wprintf(L"Closing client connection\n");
     }
     else {
         // For server mode, insert cleanup operations here
+        wprintf(L"Closing server connection\n");
         cleanupServer();
     }
     cleanupWinsock();
+    wprintf(L"Winsock cleanup and exiting program\n");
     return (int)msg.wParam; // Return the exit code
 }
 
@@ -358,9 +373,9 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             if (mode == L"Client") { // Note the 'L' prefix to create a wide string literal.
                 wchar_t ipBuffer[16] = { 0 };
                 GetDlgItemText(hDlg, IDC_IPADDRESS, ipBuffer, _countof(ipBuffer)); // Again, make sure this is the wide-char version.
-                serverIP = ipBuffer; // This is fine as both are now wide strings.
+                serverIPconf = ipBuffer; // This is fine as both are now wide strings.
             }
-            WriteSettingsToIniFile(mode, serverIP);
+            WriteSettingsToIniFile(mode, serverIPconf);
             EndDialog(hDlg, IDC_OK);
             return TRUE;
         }
@@ -381,6 +396,19 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_APPEND_TEXT_TO_CONSOLE: {
+        // Extract the text pointer from wParam and cast it back to std::wstring*
+        std::wstring* pText = reinterpret_cast<std::wstring*>(wp);
+
+        if (pText) {
+            // Do the actual UI update here
+            SetWindowText(hStaticDisplay, pText->c_str());
+
+            // Don't forget to delete the allocated memory to avoid memory leaks
+            delete pText;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     {
         HDC hdcStatic = (HDC)wp;
@@ -408,10 +436,10 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case ID_CLIENT_CONNECT: {
             closeClientConnection(); // Close the existing connection if any and re-establish
             if (!establishConnection()) {
-                MessageBox(NULL, L"Failed to connect to server. Ensure SendFSKey is running on the computer where Flight Simulator is installed.", L"Network Error", MB_ICONERROR | MB_OK);
+                wprintf(L"Trying to establish a connection to IP Address: %s\n", serverIPconf.c_str());
             }
             else {
-                MessageBox(NULL, L"Connection succesfull", L"Connected", MB_ICONINFORMATION | MB_OK);
+                wprintf(L"Connection was already established to IP Address: %s\n", serverIPconf.c_str());
 			}
             break;
         }
@@ -436,12 +464,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         UINT scanCode = (lp >> 16) & 0x00ff;
         UINT keyCodeNum = static_cast<UINT>(wp);
 
-        keyCodeNum = getKey(keyCodeNum);
-
-        printf("KEY_DOWN (SYSTEM_KEY): (%lu)\n", keyCodeNum);
-
-        bool is_key_down = 1;
-        sendKeyPress(keyCodeNum, is_key_down);
+        getKey(keyCodeNum, TRUE, TRUE); // Is system key and is key down
 
         break;
     }
@@ -450,12 +473,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         UINT scanCode = (lp >> 16) & 0x00ff;
         UINT keyCodeNum = static_cast<UINT>(wp);
 
-        keyCodeNum = getKey(keyCodeNum);
-
-        printf("KEY_DOWN: (%lu)\n", keyCodeNum);
-
-        bool is_key_down = 1;
-        sendKeyPress(keyCodeNum, is_key_down);
+        getKey(keyCodeNum, FALSE, TRUE); // Is not system key and is key down
 
         break;
     }
@@ -464,12 +482,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         UINT scanCode = (lp >> 16) & 0x00ff;
         UINT keyCodeNum = static_cast<UINT>(wp);
 
-        keyCodeNum = getKey(keyCodeNum);
-
-        printf("KEY_UP (SYSTEM_KEY): (%lu)\n", keyCodeNum);
-
-        bool is_key_down = 0;
-        sendKeyPress(keyCodeNum, is_key_down);
+        getKey(keyCodeNum, FALSE, FALSE); // Is not system key and is key up
 
         break;
     }
@@ -478,12 +491,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             UINT scanCode = (lp >> 16) & 0x00ff;
             UINT keyCodeNum = static_cast<UINT>(wp);
 
-            keyCodeNum = getKey(keyCodeNum);
-
-            printf("KEY_UP: (%lu)\n", keyCodeNum);
-
-            bool is_key_down = 0;
-            sendKeyPress(keyCodeNum, is_key_down);
+            getKey(keyCodeNum, FALSE, FALSE); // Is not system key and is key up
 
             break;
     }
@@ -498,6 +506,19 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_APPEND_TEXT_TO_CONSOLE: {
+        // Extract the text pointer from wParam and cast it back to std::wstring*
+        std::wstring* pText = reinterpret_cast<std::wstring*>(wp);
+
+        if (pText) {
+            // Do the actual UI update here
+            SetWindowText(hStaticDisplay, pText->c_str());
+
+            // Don't forget to delete the allocated memory to avoid memory leaks
+            delete pText;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     {
         HDC hdcStatic = (HDC)wp;

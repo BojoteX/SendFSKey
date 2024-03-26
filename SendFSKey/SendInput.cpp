@@ -1,9 +1,9 @@
 // SendInput.cpp
-#include <set>
+#include <stdio.h>
 #include <Windows.h>
 
 // Change how we send the keys
-bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with some keys like INSERT, DELETE, etc.)
+bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with keys like SHIFT so we never use it)
 int EXTENDED_DEBUG = 0;
 
 // Our target MSFS Window
@@ -45,7 +45,7 @@ UINT ScanCodeRelease(UINT KeyCode) {
     // Send the KEY_UP
     SendInput(1, &ip, sizeof(INPUT));
 
-    if (EXTENDED_DEBUG) printf("[FORCED SCAN CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
+    if (EXTENDED_DEBUG) printf("[FORCED SCAN_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
 
     return 1;
 }
@@ -63,7 +63,7 @@ UINT KeyRelease(UINT KeyCode) {
     // Send the KEY_UP
     SendInput(1, &ip, sizeof(INPUT));
 
-    if (EXTENDED_DEBUG) printf("[FORCED KEY RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
+    if (EXTENDED_DEBUG) printf("[FORCED VK_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
 
     return 1;
 }
@@ -82,9 +82,7 @@ UINT SendDOWNKeyWithScanCode(UINT virtualKeyCode) {
     }
 
     SendInput(1, &ip, sizeof(INPUT));
-
-    printf("[KEY_DOWN]* SendInput SCAN_CODE (%u) \n", virtualKeyCode);
-    if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
+    printf("* [KEY_DOWN] SENT TO FLIGHT SIMULATOR: (%u)\n", virtualKeyCode);
 
     return 1;
 }
@@ -107,41 +105,48 @@ UINT SendUPKeyWithScanCode(UINT virtualKeyCode) {
 
     SendInput(1, &ip, sizeof(INPUT));
 
-    printf("[KEY_UP]* SendInput SCAN_CODE (%u) \n", virtualKeyCode);
-    if (EXTENDED_DEBUG) printf("[SCANCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
+    printf("* [KEY_UP] SENT TO FLIGHT SIMULATOR: (%u)\n", virtualKeyCode);
 
     return 1;
 }
 
-UINT SendKeyWithoutScanCode(UINT virtualKeyCode, BOOL isKeyDown) {
+UINT SendDOWNKeyWithoutScanCode(UINT virtualKeyCode) {
     INPUT ip = {};
 
     ip.type = INPUT_KEYBOARD;
     ip.ki.wVk = virtualKeyCode; // Use the decimal value directly as the virtual key code.
+    ip.ki.dwFlags = 0;
 
     // Check if the key is an extended key
     if (virtualKeyCode == VK_RMENU || virtualKeyCode == VK_RCONTROL || virtualKeyCode == VK_INSERT) {
         ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
     }
 
-    if (!isKeyDown) {
-        // If it's a key release, add KEYEVENTF_KEYUP
-        ip.ki.dwFlags |= KEYEVENTF_KEYUP;
-    }
-
     SendInput(1, &ip, sizeof(INPUT));
-
-    if (isKeyDown)
-        printf("[KEY_DOWN] SendInput VK_MODE (%u) \n", virtualKeyCode);
-        if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_DOWN sent: %u\n", virtualKeyCode);
-    else
-        printf("[KEY_UP] SendInput VK_MODE (%u) \n", virtualKeyCode);
-        if (EXTENDED_DEBUG) printf("[KEYCODE] SendInput: KEY_UP sent: %u\n", virtualKeyCode);
+    printf("[KEY_DOWN] SendInput VK_MODE (%u) \n", virtualKeyCode);
 
     return 1;
 }
 
-UINT SendKeyPressDOWN(UINT KeyCode) {
+UINT SendUPKeyWithoutScanCode(UINT virtualKeyCode) {
+    INPUT ip = {};
+
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.wVk = virtualKeyCode; // Use the decimal value directly as the virtual key code.
+    ip.ki.dwFlags = KEYEVENTF_KEYUP;
+
+    // Check if the key is an extended key
+    if (virtualKeyCode == VK_RMENU || virtualKeyCode == VK_RCONTROL || virtualKeyCode == VK_INSERT) {
+        ip.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    }
+
+    SendInput(1, &ip, sizeof(INPUT));
+    printf("[KEY_UP] SendInput VK_MODE (%u) \n", virtualKeyCode);
+
+    return 1;
+}
+
+UINT ServerKeyPressDOWN(UINT KeyCode) {
 
     // We only want to send the key press if the MSFS window is in focus, if not, we bring it to focus
     BringWindowToForegroundByClassName(MSFSclassName);
@@ -150,91 +155,20 @@ UINT SendKeyPressDOWN(UINT KeyCode) {
         SendDOWNKeyWithScanCode(KeyCode);
     }
     else {
-        INPUT ip = { 0 };
-        ip.type = INPUT_KEYBOARD;
-        ip.ki.wVk = KeyCode; // Use the decimal value directly as the virtual key code.
-
-        // Check if the key is an extended key
-        if (KeyCode == VK_RMENU || KeyCode == VK_RCONTROL || KeyCode == VK_INSERT) {
-            ip.ki.dwFlags = KEYEVENTF_EXTENDEDKEY;
-        }
-
-        // Send the KEY_DOWN
-        SendInput(1, &ip, sizeof(INPUT));
-        printf("[KEY_DOWN] SendInput VK_MODE (%u) \n", KeyCode);
+        SendDOWNKeyWithoutScanCode(KeyCode);
     }
     return 1;
 }
 
-UINT SendKeyPressUP(UINT KeyCode) {
-
-    if (EXTENDED_DEBUG) printf("[SWITCH CASE] Received: %u\n", KeyCode);
+UINT ServerKeyPressUP(UINT KeyCode) {
 
     if (USE_SCAN_CODE) {
         SendUPKeyWithScanCode(KeyCode);
     }
     else {
-        SendKeyWithoutScanCode(KeyCode, 0); // 1 Means KEY_DOWN and 0 Means KEY_UP
+        SendUPKeyWithoutScanCode(KeyCode);
     }
     
-    // Assuming KeyCode is an array or vector that can hold multiple key codes.
-    std::set<UINT> keyCodes;
-
-    int found = 0;
-    // Populate keyCodes based on the current state of SHIFT, CONTROL, and ALT keys
-    if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
-        keyCodes.insert(VK_LSHIFT);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LSHIFT);
-        found = 1;
-    }
-    if (GetAsyncKeyState(VK_RSHIFT) & 0x8000) {
-        keyCodes.insert(VK_RSHIFT);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RSHIFT);
-        found = 1;
-    }
-    if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) {
-        keyCodes.insert(VK_LCONTROL);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LCONTROL);
-        found = 1;
-    }
-    if (GetAsyncKeyState(VK_RCONTROL) & 0x8000) {
-        keyCodes.insert(VK_RCONTROL);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RCONTROL);
-        found = 1;
-    }
-    if (GetAsyncKeyState(VK_LMENU) & 0x8000) {
-        keyCodes.insert(VK_LMENU);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_LMENU);
-        found = 1;
-    }
-    if (GetAsyncKeyState(VK_RMENU) & 0x8000) {
-        keyCodes.insert(VK_RMENU);
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Added to array: %u\n", VK_RMENU);
-        found = 1;
-    }
-
-    // This is just a precaution
-    if (found) {
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] Iterated the array for KeyReleases above\n");
-
-        printf("[VECTOR] -BEGIN- block\n");
-        if (USE_SCAN_CODE) {
-            for (UINT keyCode : keyCodes) {
-                SendUPKeyWithScanCode(keyCode);
-            }
-        }
-        else {
-            for (UINT keyCode : keyCodes) {
-                SendKeyWithoutScanCode(keyCode, 0); // 0 for key release
-                printf("[KEY_UP] SendInput VK_MODE (%u) \n", keyCode);
-            }
-        }
-        printf("[VECTOR] -END- block\n");
-    }
-    else {
-        if (EXTENDED_DEBUG) printf("[SWITCH CASE] No modification was needed: %u\n", KeyCode);
-    }
-
     if (EXTENDED_DEBUG) {
         // Slight pause after the key up to see what got stuck
         Sleep(25);
