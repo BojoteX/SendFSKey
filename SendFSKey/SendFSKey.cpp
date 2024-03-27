@@ -9,6 +9,24 @@
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 
+/*
+// Initialize handles (Declaration)
+HANDLE guiReadyEvent = NULL; // Initialization at declaration
+
+        // Create an event to signal when the GUI is ready
+        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
+        if (guiReadyEvent == NULL) {
+            wprintf(L"Could not create the guiReady event\n");
+        }
+
+        // After setting up the GUI and just before starting the message loop:
+        if (guiReadyEvent != NULL) {
+            SetEvent(guiReadyEvent);
+        }
+
+        WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
+*/
+
 HINSTANCE g_hInst = NULL;  // Definition
 HINSTANCE g_hInst_client = NULL;  // Definition
 HINSTANCE g_hInst_server = NULL;  // Definition
