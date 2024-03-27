@@ -105,8 +105,6 @@ void handleClient(SOCKET clientSocket) {
 
 void startServer() {
 
-    printf("Trying to start server...\n");
-
     // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
     std::thread([]() {
         while (serverRunning) {
@@ -133,7 +131,7 @@ void startServer() {
 
             std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
             wprintf(L"Received connection from: %s\n", wideIP.c_str());
-            AppendTextToConsole(hStaticServer, L"Received new connection...\n");
+            SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Received new connection..");
 
             // Send the server signature immediately after accepting the connection
             send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
@@ -145,7 +143,7 @@ void startServer() {
     wprintf(L"Server is now running. Ready to accept connections on %s", getServerIPAddress().c_str());
 
     // Update the GUI to show the server is running
-    AppendTextToConsole(hStaticServer, L"Server is now running. Ready to accept connections.\n");
+    SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is now running. Ready to accept connections");
 
     // Start monitoring in a separate thread
     if (isFlightSimulatorRunning()) {

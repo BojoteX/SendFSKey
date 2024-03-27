@@ -2,8 +2,6 @@
 
 #include <atomic>
 
-#define WM_APPEND_TEXT (WM_USER + 1)
-
 // My Globals
 extern HANDLE guiReadyEvent;
 extern std::atomic<bool> serverRunning;

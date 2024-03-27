@@ -51,14 +51,12 @@ bool establishConnection() {
         if (establishConnectionAsync()) {
             // Connection successful
             printf("Connection established.\n");
-            // Update GUI to show connection successful, ensuring to do so in a thread-safe manner.
-            std::wstring finalMessage = L"Connection successfully established or already connected.\r\n";
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connected..");
         }
         else {
             // Connection failed
             printf("Failed to establish connection.\n");
-            // Update GUI to show connection failed, ensuring to do so in a thread-safe manner.
-            std::wstring finalMessage = L"Failed to establish connection.\n";
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection failed..");
         }
     }).detach(); // Detach the thread to allow it to run independently
 
@@ -70,6 +68,7 @@ bool establishConnection() {
 bool establishConnectionAsync() {
     if (g_persistentSocket != INVALID_SOCKET) {
         printf("The connection is already established.\n");
+        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"The connection is already established");
         return true; // Connection is already established
     }
 
@@ -133,15 +132,16 @@ bool establishConnectionAsync() {
                 return false;
             }
 
-            AppendTextToConsole(hStaticClient, L"Connected");
             return true; // Connection and verification successful
         }
         else {
             printf("Connection failed with error: %d\n", so_error);
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection failed with error " + so_error);
         }
     }
     else {
         printf("Connection timed out or failed.\n");
+        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"The connection timed out or failed");
     }
 
     // Cleanup on failure

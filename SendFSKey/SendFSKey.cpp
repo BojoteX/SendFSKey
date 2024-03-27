@@ -39,9 +39,6 @@ WNDCLASS ws = { 0 };
 wchar_t const* windowName;
 wchar_t const* className;
 
-// Initialize handles
-HANDLE guiReadyEvent = NULL; // Initialization at declaration
-
 // Operation mode
 std::wstring consoleVisibility;
 bool isClientMode;
@@ -198,31 +195,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         SendMessage(hStaticClient, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
 
-        // Create an event to signal when the GUI is ready
-        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
-        if (guiReadyEvent == NULL) {
-            wprintf(L"Could not create the guiReady event\n");
-        }
-
-        // After setting up the GUI and just before starting the message loop:
-        if (guiReadyEvent != NULL) {
-            SetEvent(guiReadyEvent);
-        }
-
-        // Append text to the server window
-        AppendTextToConsole(hStaticClient, L"Banner goes here\n");
-        
-        // Async connection attempt
+        // Connection attempt
         if (!establishConnection()) {
             // Get the IP address of the server
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Trying to establish a connection to " + serverIPconf.c_str());
             wprintf(L"Trying to establish a connection to IP Address: %s\n", serverIPconf.c_str());
         }
         else {
             wprintf(L"Connection already established\n");
-		}
+        }
 
         // This is our window loop for the client
         if(DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
+
         while (GetMessage(&msg_client, nullptr, 0, 0)) {
             TranslateMessage(&msg_client);
             DispatchMessage(&msg_client);
@@ -333,26 +318,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             SetEvent(guiReadyEvent);
         }
 
-        // Start the server in a separate thread
-        std::thread([&]() {
-            WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
-
-            // Now, the GUI is guaranteed to be ready.
-            // Check if the server is already running
-            if (isServerUp()) {
-                wprintf(L"Could not start server. Port is already in use, restart your computer\n");
-                MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
+        WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
+            
+        // Check if the server is already running
+        if (isServerUp()) {
+            wprintf(L"Could not start server. Port is already in use, restart your computer\n");
+            MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
+            SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Could not start server. Port is already in use, restart your computer");
+        }
+        else {
+            // Attempt to start the server
+            if (!initializeServer()) {
+                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
             }
             else {
-                // Attempt to start the server
-                if (!initializeServer()) {
-                    MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-                }
-                else {
-                    // Append text to the server window
-                }
+                SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is starting...");
             }
-        }).detach(); // Detach the thread to allow it to run independently
+        }
 
         // This is the server window loop
         if (DEBUG) wprintf(L"GUI WindowProcess loop starting. We can now send messages to the server GUI.\n");
@@ -376,8 +358,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit application due to invalid input or incorrect ini file
     }
 
+
+    if (!guiReadyEvent == NULL) 
+        CloseHandle(guiReadyEvent); // Close the event handle
+
     // This is for BOTH client and server
-    CloseHandle(guiReadyEvent);
     cleanupWinsock();
     wprintf(L"Winsock cleanup and exiting program\n");
 
@@ -451,23 +436,6 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_APPEND_TEXT: {
-        // Extract the text pointer from lParam, which was dynamically allocated
-        std::wstring* pText = reinterpret_cast<std::wstring*>(lp);
-
-        if (pText != nullptr) {
-            // Append the text as before
-            int length = GetWindowTextLength(hWnd);
-            std::wstring buffer(length + pText->length() + 1, L'\0');
-            GetWindowText(hWnd, &buffer[0], length + 1);
-            buffer.append(*pText);
-            SetWindowText(hWnd, buffer.c_str());
-
-            // Clean up the dynamically allocated memory
-            delete pText;
-        }
-        return 0;
-    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
@@ -554,23 +522,6 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_APPEND_TEXT: {
-        // Extract the text pointer from lParam, which was dynamically allocated
-        std::wstring* pText = reinterpret_cast<std::wstring*>(lp);
-
-        if (pText != nullptr) {
-            // Append the text as before
-            int length = GetWindowTextLength(hWnd);
-            std::wstring buffer(length + pText->length() + 1, L'\0');
-            GetWindowText(hWnd, &buffer[0], length + 1);
-            buffer.append(*pText);
-            SetWindowText(hWnd, buffer.c_str());
-
-            // Clean up the dynamically allocated memory
-            delete pText;
-        }
-        return 0;
-    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
