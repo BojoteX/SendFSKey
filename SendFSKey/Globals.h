@@ -1,28 +1,31 @@
 #pragma once
 
-#include <string>
 #include <atomic>
 
-#define WM_APPEND_TEXT_TO_CONSOLE (WM_USER + 1)
+#define WM_APPEND_TEXT (WM_USER + 1)
 
 // My Globals
+extern HANDLE guiReadyEvent;
 extern std::atomic<bool> serverRunning;
 extern bool DEBUG;
+extern HWND hStaticServer;
+extern HWND hStaticClient;
+extern HINSTANCE g_hInst;
+extern HINSTANCE g_hInst_client;
+extern HINSTANCE g_hInst_server;
+extern bool isClientMode;
 extern std::wstring mode;
 extern std::wstring serverIP;
 extern std::wstring serverIPconf;
 extern int port;
-extern HINSTANCE g_hInst;
-extern HWND hStaticServer;
-extern HWND hStaticClient;
-extern bool isClientMode;
 
 // To use from anywhere
-void AppendTextToConsole(HWND hStatic, const std::wstring& text);
+void AppendTextToConsole(HWND hStc, const std::wstring& text);
 void MonitorFlightSimulatorProcess();
 bool isFlightSimulatorRunning();
 std::wstring getServerIPAddress();
 std::wstring FormatForDisplay(const std::string& data);
+
 
 // Key pressing functions
 void sendKeyPress(UINT keyCode, bool isKeyDown); // Used by client to send key presses

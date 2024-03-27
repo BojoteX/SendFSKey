@@ -1,24 +1,25 @@
 #include <Windows.h>
+#include <string>
 #include <thread>
 #include <sstream>
+#include "framework.h"
+#include "SendFSKey.h"
 #include "Globals.h"
 #include "utilities.h"
 #include "NetworkClient.h"
 #include "NetworkServer.h"
-#include "Resource.h"
-
-// Only define DEBUG if you want to see debug messages
-bool DEBUG = FALSE;
 
 HINSTANCE g_hInst = NULL;  // Definition
-HWND hStaticServer = NULL; // Handle to your server edit control
-HWND hStaticClient = NULL; // Handle to your client edit control
-std::wstring consoleVisibility;
+HINSTANCE g_hInst_client = NULL;  // Definition
+HINSTANCE g_hInst_server = NULL;  // Definition
 
 // Default values for the client and server Windows
-int DEFAULT_WIDTH = 560;
-int DEFAULT_HEIGHT = 155;
+int DEFAULT_WIDTH = 760;
+int DEFAULT_HEIGHT = 255;
 int FONT_SIZE = 18;
+
+HWND hStaticServer = NULL; // Handle to your server edit control
+HWND hStaticClient = NULL; // Handle to your client edit control
 
 // Function prototypes
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -26,11 +27,9 @@ LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-// Operation mode
-bool isClientMode;
-
-// Message loop
-MSG msg = { 0 };
+// Message loop for client and server
+MSG msg_client = { 0 };
+MSG msg_server = { 0 };
 
 // App Window Initialization
 WNDCLASS wc = { 0 };
@@ -40,12 +39,18 @@ WNDCLASS ws = { 0 };
 wchar_t const* windowName;
 wchar_t const* className;
 
+// Initialize handles
+HANDLE guiReadyEvent = NULL; // Initialization at declaration
+
+// Operation mode
+std::wstring consoleVisibility;
+bool isClientMode;
+bool DEBUG = FALSE;
+
 // Our ini file path
 std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini"; // Build the full INI file path
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
-
-    g_hInst = hInstance;
 
     // Check if the INI file exists
     if (!IniFileExists("SendFSKey.ini")) {
@@ -94,27 +99,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
     }
 
-    // Show the console window, all messages before console is open display MessageBox. We can later conditionally check our ini file to see if we start the console window or not.
-    // From now on we can use printf to output to the console window.
-
     // Assume iniPath is already defined and holds the path to your INI file
     wchar_t visibilityBuffer[5]; // Enough for "true" or "false"
     GetPrivateProfileStringW(L"Settings", L"ConsoleVisibility", L"Yes", visibilityBuffer, 5, iniPath.c_str());
     std::wstring consoleVisibility = visibilityBuffer;
-
-    if (isClientMode) {
-        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Client Console");
-	}
-    else {
-        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Server Console");
-    }
 
     // Initialize Winsock for both client and server
     if (!initializeWinsock()) {
         return -1; // Exit if Winsock initialization fails
     }
 
+    int exitCode = 0; // Default exit code
+
     if (isClientMode) {
+
+        // Show the console window
+        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Client Console");
+
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey Client";
@@ -132,14 +133,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Client Window
         HWND hWndClient = CreateWindowEx(
-            0,                // No extended window styles.
+            WS_EX_APPWINDOW,  // No extended window styles.
             className,        // Pointer to registered class name.
             windowName,       // Pointer to window name.
             WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
             CW_USEDEFAULT,    // Use the system's default horizontal position.
             CW_USEDEFAULT,    // Use the system's default vertical position.
-            DEFAULT_WIDTH,    // Use the system's default width.
-            DEFAULT_HEIGHT,    // Use the system's default height.
+            800,    // Use the system's default width.
+            600,    // Use the system's default height.
             nullptr,          // No parent window.
             nullptr,          // Use the class menu.
             hInstance,        // Handle to application instance.
@@ -159,10 +160,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles.
             8,                 // x-coordinate of the upper-left corner.
             8,                 // y-coordinate of the upper-left corner.
-            DEFAULT_WIDTH,                // Width; adjusted for padding.
-            DEFAULT_HEIGHT,                 // Height; enough for one line of text, adjust as needed.
+            400,                // Width; adjusted for padding.
+            300,                 // Height; enough for one line of text, adjust as needed.
             hWndClient,         // Handle to the parent window.
-            (HMENU)IDC_MAIN_DISPLAY, // Control ID, ensure it's unique and doesn't conflict with existing IDs.
+            (HMENU)IDC_MAIN_DISPLAY_TEXT, // Control ID, ensure it's unique and doesn't conflict with existing IDs.
             hInstance,          // Handle to application instance.
             NULL                // No additional window data.
         );
@@ -174,7 +175,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            FONT_SIZE,        // Font height.
+            18,               // Font height.
             0,                // Average character width.
             0,                // Angle of escapement.
             0,                // Base-line orientation angle.
@@ -190,7 +191,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             L"Segoe UI"       // Font typeface name.
         );
 
+        // Check if the Main Client Window was created successfully.
+        if (!hFontStatic) {
+            return -1; // Handle main window creation failure.
+        }
+
         SendMessage(hStaticClient, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
+
+        // Create an event to signal when the GUI is ready
+        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
+        if (guiReadyEvent == NULL) {
+            wprintf(L"Could not create the guiReady event\n");
+        }
+
+        // After setting up the GUI and just before starting the message loop:
+        if (guiReadyEvent != NULL) {
+            SetEvent(guiReadyEvent);
+        }
+
+        // Append text to the server window
+        AppendTextToConsole(hStaticClient, L"Banner goes here\n");
         
         // Async connection attempt
         if (!establishConnection()) {
@@ -203,12 +223,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // This is our window loop for the client
         if(DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
-        while (GetMessage(&msg, nullptr, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+        while (GetMessage(&msg_client, nullptr, 0, 0)) {
+            TranslateMessage(&msg_client);
+            DispatchMessage(&msg_client);
         }
+
+        closeClientConnection(); // For client
+        wprintf(L"Closing client connection\n");
+
+        cleanupWinsock();
+        wprintf(L"Winsock cleanup and exiting program\n");
+
+        // Set exit code from client message loop
+        exitCode = (int)msg_client.wParam;
     }
     else if (!isClientMode) {
+
+        if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Server Console");
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey - Server";
@@ -226,14 +257,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Server Window
         HWND hWndServer = CreateWindowEx(
-            0,                // Extended window styles.
+            WS_EX_APPWINDOW,  // Extended window styles.
             className,        // Pointer to registered class name.
             windowName,       // Pointer to window name.
             WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
             CW_USEDEFAULT,    // Use the system's default horizontal position.
             CW_USEDEFAULT,    // Use the system's default vertical position.
-            DEFAULT_WIDTH,    // Use the system's default width.
-            DEFAULT_HEIGHT,   // Use the system's default height.
+            800,        // Use the system's default width.
+            600,   // Use the system's default height.
             NULL,             // No parent window.
             NULL,             // No menu.
             hInstance,        // Handle to application instance.
@@ -253,10 +284,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles for text display.
             8,                 // x-coordinate of the upper-left corner.
             8,                 // y-coordinate of the upper-left corner.
-            DEFAULT_WIDTH,      // Width of the control; adjusted for padding.
-            DEFAULT_HEIGHT,     // Height of the control; enough for one line of text, adjust as needed.
+            400,      // Width of the control; adjusted for padding.
+            300,     // Height of the control; enough for one line of text, adjust as needed.
             hWndServer,         // Handle to the parent window.
-            (HMENU)IDC_STATIC_SERVER, // Control ID, use a unique identifier.
+            (HMENU)IDC_STATIC_SERVER_TEXT, // Control ID, use a unique identifier.
             hInstance,          // Handle to the instance.
             NULL                // No additional window data.
         );
@@ -268,7 +299,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            FONT_SIZE,        // Font height.
+            20,        // Font height.
             0,                // Average character width.
             0,                // Angle of escapement.
             0,                // Base-line orientation angle.
@@ -284,37 +315,60 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             L"Segoe UI"       // Font typeface name.
         );
 
+        // Check if the static control was created successfully.
+        if (!hFontStatic) {
+            return -1; // Handle static control creation failure.
+        }
+
         SendMessage(hStaticServer, WM_SETFONT, (WPARAM)hFontStatic, MAKELPARAM(TRUE, 0));
 
-        if (isServerUp()) {
-            wprintf(L"Could not start server. Port is already in use, restart your computer\n");
-            MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
-            // return -1;  // This return should happen regardless of the DEBUG flag's state
+        // Create an event to signal when the GUI is ready
+        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
+        if (guiReadyEvent == NULL) {
+            wprintf(L"Could not create the guiReady event\n");
         }
-        else {
-            std::wstring serverIP = getServerIPAddress();
-            // Display the server IP address and port in the console
 
-            std::wstring finalMessage = L"SendFSKey v1.0 - by Jesus \"Bojote\" Altuve - Free to use and distribute\r\n";
-            finalMessage += L"\n";
-            finalMessage += L"Server started successfully on ";
-            finalMessage += L"IP Address: " + serverIP + L", "; // Correct usage of .c_str()
-            finalMessage += L"using port: " + std::to_wstring(port) + L".\n";
-            finalMessage += L"Ready to accept connections. Just run SendFSKey on remote computer in client mode\n";
-            finalMessage += L"\n";
-            AppendTextToConsole(hStaticServer, L"Connected.\r\n"); //
+        // After setting up the GUI and just before starting the message loop:
+        if (guiReadyEvent != NULL) {
+            SetEvent(guiReadyEvent);
+        }
 
-            // Start the server
-            if (!initializeServer())
-                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-		}
+        // Start the server in a separate thread
+        std::thread([&]() {
+            WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
+
+            // Now, the GUI is guaranteed to be ready.
+            // Check if the server is already running
+            if (isServerUp()) {
+                wprintf(L"Could not start server. Port is already in use, restart your computer\n");
+                MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
+            }
+            else {
+                // Attempt to start the server
+                if (!initializeServer()) {
+                    MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
+                }
+                else {
+                    // Append text to the server window
+                }
+            }
+        }).detach(); // Detach the thread to allow it to run independently
 
         // This is the server window loop
-        if (DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the server GUI.\n");
-        while (GetMessage(&msg, nullptr, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+        if (DEBUG) wprintf(L"GUI WindowProcess loop starting. We can now send messages to the server GUI.\n");
+
+        while (GetMessage(&msg_server, nullptr, 0, 0)) {
+            TranslateMessage(&msg_server);
+            DispatchMessage(&msg_server);
         }
+
+        // For server mode, insert cleanup operations here
+        serverRunning = false;
+        wprintf(L"Closing server connection\n");
+        cleanupServer();
+
+        // Set exit code from server message loop
+        exitCode = (int)msg_server.wParam;
     }
     else {
         MessageBoxA(NULL, "Mode not set. Application will now exit.", "Error", MB_ICONERROR);
@@ -322,20 +376,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         return -1; // Exit application due to invalid input or incorrect ini file
     }
 
-    // Cleanup before exit
-    if (isClientMode) {
-        closeClientConnection(); // For client
-        wprintf(L"Closing client connection\n");
-    }
-    else {
-        // For server mode, insert cleanup operations here
-        serverRunning = false;
-        wprintf(L"Closing server connection\n");
-        cleanupServer();
-    }
+    // This is for BOTH client and server
+    CloseHandle(guiReadyEvent);
     cleanupWinsock();
     wprintf(L"Winsock cleanup and exiting program\n");
-    return (int)msg.wParam; // Return the exit code
+
+    return exitCode; // Return the exit code
 }
 
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -405,42 +451,28 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_APPEND_TEXT_TO_CONSOLE: {
-        // Extract the text pointer from wParam and cast it back to std::wstring*
-        std::wstring* pText = reinterpret_cast<std::wstring*>(wp);
+    case WM_APPEND_TEXT: {
+        // Extract the text pointer from lParam, which was dynamically allocated
+        std::wstring* pText = reinterpret_cast<std::wstring*>(lp);
 
-        if (pText) {
-            // Do the actual UI update here
-            SetWindowText(hStaticClient, pText->c_str());
+        if (pText != nullptr) {
+            // Append the text as before
+            int length = GetWindowTextLength(hWnd);
+            std::wstring buffer(length + pText->length() + 1, L'\0');
+            GetWindowText(hWnd, &buffer[0], length + 1);
+            buffer.append(*pText);
+            SetWindowText(hWnd, buffer.c_str());
 
-            // Don't forget to delete the allocated memory to avoid memory leaks
+            // Clean up the dynamically allocated memory
             delete pText;
         }
         return 0;
     }
-    case WM_CTLCOLORSTATIC:
-    {
-        HDC hdcStatic = (HDC)wp;
-        SetBkMode(hdcStatic, TRANSPARENT); // Set background mode to transparent
-        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE); // Use system button face color
-    }
-    case WM_SIZE:
-    {
-        int padding = 8; // For example, a padding of 0 pixels
-
-        // Get the new width and height of the window
-        int width = LOWORD(lp) - 2 * padding;
-        int height = HIWORD(lp) - 2 * padding;
-
-        // Resize and reposition the control
-        MoveWindow(hStaticClient, padding, padding, width, height, TRUE);
-    }
-    break;
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
         case IDM_ABOUT:
-            DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
+            DialogBox(g_hInst_client, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
         case ID_CLIENT_CONNECT: {
             closeClientConnection(); // Close the existing connection if any and re-establish
@@ -461,7 +493,6 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDM_RESET_SETTINGS:
             DeleteIniFileAndRestart();
             break;
-            // Add cases for other menu items...
         case WM_DESTROY:
             PostQuitMessage(0);
             break;
@@ -512,6 +543,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0; // Indicate that we handled the message
     }
     case WM_DESTROY:
+        CloseHandle(guiReadyEvent);
         PostQuitMessage(0);
         break;
     default:
@@ -522,41 +554,28 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_APPEND_TEXT_TO_CONSOLE: {
-        // Extract the text pointer from wParam and cast it back to std::wstring*
-        std::wstring* pText = reinterpret_cast<std::wstring*>(wp);
+    case WM_APPEND_TEXT: {
+        // Extract the text pointer from lParam, which was dynamically allocated
+        std::wstring* pText = reinterpret_cast<std::wstring*>(lp);
 
-        if (pText) {
-            // Do the actual UI update here
-            SetWindowText(hStaticClient, pText->c_str());
+        if (pText != nullptr) {
+            // Append the text as before
+            int length = GetWindowTextLength(hWnd);
+            std::wstring buffer(length + pText->length() + 1, L'\0');
+            GetWindowText(hWnd, &buffer[0], length + 1);
+            buffer.append(*pText);
+            SetWindowText(hWnd, buffer.c_str());
 
-            // Don't forget to delete the allocated memory to avoid memory leaks
+            // Clean up the dynamically allocated memory
             delete pText;
         }
         return 0;
-    }
-    case WM_CTLCOLORSTATIC:
-    {
-        HDC hdcStatic = (HDC)wp;
-        SetBkMode(hdcStatic, TRANSPARENT); // Set background mode to transparent
-        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE); // Use system button face color
-    }
-    case WM_SIZE:
-    {
-        int padding = 8; // For example, a padding of 0 pixels
-
-        // Get the new width and height of the window
-        int width = LOWORD(lp) - 2 * padding;
-        int height = HIWORD(lp) - 2 * padding;
-
-        // Resize and reposition the control
-        MoveWindow(hStaticServer, padding, padding, width, height, TRUE);
     }
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
         case IDM_ABOUT:
-            DialogBox(g_hInst, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
+            DialogBox(g_hInst_server, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
         case IDM_ENABLE_CONSOLE:
             ToggleConsoleVisibility(L"SendFSKey Server Console");
@@ -578,21 +597,22 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
             break;
-        case WM_CLOSE: {
-            serverRunning = false;
-            cleanupServer();
-            cleanupWinsock();
-            // Destroy the window to close it
-            DestroyWindow(hWnd);
-            return 0; // Indicate that we handled the message
-        }
         case WM_DESTROY:
             PostQuitMessage(0);
             break;
         }
         break; // End of WM_COMMAND
     }
+    case WM_CLOSE: {
+        serverRunning = false;
+        cleanupServer();
+        cleanupWinsock();
+        // Destroy the window to close it
+        DestroyWindow(hWnd);
+        return 0; // Indicate that we handled the message
+    }
     case WM_DESTROY:
+        CloseHandle(guiReadyEvent);
         PostQuitMessage(0); // Signal to end the application
         break;
     default:

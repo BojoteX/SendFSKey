@@ -120,7 +120,6 @@ bool establishConnectionAsync() {
 
         if (so_error == 0) {
             // Connection successful
-            AppendTextToConsole(hStaticClient, L"Connected.\r\n");
 
             // Set socket back to blocking mode
             mode = 0;
@@ -134,6 +133,7 @@ bool establishConnectionAsync() {
                 return false;
             }
 
+            AppendTextToConsole(hStaticClient, L"Connected");
             return true; // Connection and verification successful
         }
         else {
@@ -187,7 +187,8 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         // Check if reconnection was successful
         if (isConnected) {
             printf("Reconnection successful. Resending data...\n");
-            // After reconnecting, try sending the key code again
+            // After reconnecting, try sending the signature again
+
             if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
                 printf("Failed to send data after reconnecting.\n");
                 // Handle failure to resend data here

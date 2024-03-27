@@ -12,7 +12,7 @@ std::wstring serverIPconf = L"0.0.0.0";
 int port = 8028;
 
 // Required for the console window
-const size_t MAX_BUFFER_SIZE = 1024 * 10; // 10 KB, adjust as necessary, this is needed for the static control
+const size_t MAX_BUFFER_SIZE = 4096 * 10; // 10 KB, adjust as necessary, this is needed for the static control
 
 // Below are the key codes for the keys that are not standard and required conversion
 std::unordered_map<UINT, UINT> keyDownToUpMapping;
@@ -71,13 +71,9 @@ std::wstring FormatForDisplay(const std::string& data) {
     return formattedMessage;
 }
 
-void AppendTextToConsole(HWND hStatic, const std::wstring& text) {
-    // Allocate new memory for the text to be sent to the window procedure
-    std::wstring* pText = new std::wstring(text);
-
-    // Post the custom message along with the pointer to the text
-    if (DEBUG) printf("Posting message to GUI (console)\n");
-    PostMessage(hStatic, WM_APPEND_TEXT_TO_CONSOLE, reinterpret_cast<WPARAM>(pText), 0);
+void AppendTextToConsole(HWND hStc, const std::wstring& text) {
+    // Directly send the new text to the control. This approach replaces the current text.
+    SendMessage(hStc, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(text.c_str()));
 }
 
 void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {

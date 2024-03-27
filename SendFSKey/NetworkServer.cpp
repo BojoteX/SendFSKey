@@ -133,9 +133,7 @@ void startServer() {
 
             std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
             wprintf(L"Received connection from: %s\n", wideIP.c_str());
-
-            // PostUpdateToUI(formattedMessage.c_str());
-            AppendTextToConsole(hStaticServer, formattedMessage.c_str());
+            AppendTextToConsole(hStaticServer, L"Received new connection...\n");
 
             // Send the server signature immediately after accepting the connection
             send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
@@ -144,7 +142,10 @@ void startServer() {
             serverThread.detach(); // Detach the thread to handle the client independently
         }
     }).detach(); // Detach the thread since we don't need to join it.
-    printf("Server is now running. Ready to accept connections.\n");
+    wprintf(L"Server is now running. Ready to accept connections on %s", getServerIPAddress().c_str());
+
+    // Update the GUI to show the server is running
+    AppendTextToConsole(hStaticServer, L"Server is now running. Ready to accept connections.\n");
 
     // Start monitoring in a separate thread
     if (isFlightSimulatorRunning()) {
