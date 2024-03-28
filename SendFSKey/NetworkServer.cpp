@@ -53,7 +53,6 @@ std::wstring getServerIPAddress() {
     }
 
     freeaddrinfo(res); // Free the memory allocated by getaddrinfo
-    wprintf(L"Your server IP address is %s.\n", ipAddress.c_str());
     return ipAddress;
 }
 
@@ -98,15 +97,16 @@ void handleClient(SOCKET clientSocket) {
         // Send acknowledgment back to the client
         char ack = 1;
         send(clientSocket, &ack, sizeof(ack), 0);
+
+        printf("Running...\n");
     }
+
     printf("Client socket closed.\n");
-    closesocket(clientSocket); // Clean up the socket
 }
 
 void startServer() {
-
     // This loop runs by every single client connection (not client interaction and data payloads from clients, for that see handleClient above)
-    std::thread([]() {
+    std::thread([&]() {
         while (serverRunning) {
             // Get the IP Address of the connecting client
             sockaddr_in clientAddr; // Declare the structure to store client address
@@ -115,7 +115,7 @@ void startServer() {
             SOCKET clientSocket = accept(g_listenSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
 
             if (clientSocket == INVALID_SOCKET) {
-                printf("Failed to accept connection.\n");
+                printf("Connection reset.\n");
                 continue; // Continue to accept the next connection
             }
 
@@ -139,21 +139,13 @@ void startServer() {
             std::thread serverThread(handleClient, clientSocket);
             serverThread.detach(); // Detach the thread to handle the client independently
         }
-    }).detach(); // Detach the thread since we don't need to join it.
-    wprintf(L"Server is now running. Ready to accept connections on %s", getServerIPAddress().c_str());
-
-    // Update the GUI to show the server is running
-    SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is now running. Ready to accept connections");
-
-    // Start monitoring in a separate thread
-    if (isFlightSimulatorRunning()) {
-        MonitorFlightSimulatorProcess();
-        printf("Will monitor the MSFS process so that when it closes, we also close SendFSKey.\n");
-    }
+	}).detach();
 }
 
 // This function is called in a separate thread to start the server and avoid blocking the main thread
 bool initializeServer() {
+
+    SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Starting server...");
 
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -194,12 +186,38 @@ bool initializeServer() {
 
     // We start the server in a separate thread to avoid blocking the main thread
     if (DEBUG) printf("Starting server on a separate thread to avoid GUI blocking\n");
+
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for 1 second so we make sure server is ready to listen
     startServer();
 
+    // Fetch the IP address as a std::wstring
+    std::wstring serverIP = getServerIPAddress();
+
+    // Create the message to be sent
+    std::wstring message = L"Server started on IP address: " + serverIP;
+
+    // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
+    SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)message.c_str());
+
+    // Return true to indicate the server was successfully started
     return true;
 }
 
+void serverStartThread() {
+    // Start the server in a separate thread to avoid blocking the main thread
+    std::thread serverThread(initializeServer);
+    serverThread.detach(); // Detach the thread to handle the client independently
+}
+
 void shutdownServer() {
+
+    SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is shutting down...");
+
+    // Give time for the server to shut down
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for 1 second so the server can shut down
+    serverRunning = false; // Set the server running flag to false so it exits the loop and I can clean up and close the server
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for 1 second so the server can shut down
+
     closesocket(g_listenSocket);
     WSACleanup();
 }

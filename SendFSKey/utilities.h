@@ -71,11 +71,6 @@ std::wstring FormatForDisplay(const std::string& data) {
     return formattedMessage;
 }
 
-void AppendTextToConsole(HWND hStc, const std::wstring& text) {
-    // Directly send the new text to the control. This approach replaces the current text.
-    SendMessage(hStc, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(text.c_str()));
-}
-
 void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
 
     if (isKeyDown) {

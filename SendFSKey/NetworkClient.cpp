@@ -39,36 +39,16 @@ bool verifyServerSignature(SOCKET serverSocket) {
     return false;
 }
 
-bool establishConnection() {
-    // Initiate the connection attempt in a new thread 
-    if (g_persistentSocket != INVALID_SOCKET) {
-        printf("Connection is already established.\n");
-        return true; // Connection is already established
-    }
-
-    std::thread([]() {
-        // Initiate the connection attempt in a new thread only if no active socket was found.
-        if (establishConnectionAsync()) {
-            // Connection successful
-            printf("Connection established.\n");
-            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connected..");
-        }
-        else {
-            // Connection failed
-            printf("Failed to establish connection.\n");
-            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection failed..");
-        }
-    }).detach(); // Detach the thread to allow it to run independently
-
-    // Will always return true since the connection attempt is in a separate thread, so don't check the return value here but rather send a message to the GUI
-    // We still return true here to indicate that the connection attempt has been initiated but not necessarily completed yet.
-    return false;
+void clientConnectionThread() {
+    // Establish the connection
+    std::thread clientThread(establishConnection);
+    clientThread.detach(); // Detach the thread to handle the client independently
 }
 
-bool establishConnectionAsync() {
+bool establishConnection() {
+
     if (g_persistentSocket != INVALID_SOCKET) {
         printf("The connection is already established.\n");
-        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"The connection is already established");
         return true; // Connection is already established
     }
 
@@ -136,12 +116,10 @@ bool establishConnectionAsync() {
         }
         else {
             printf("Connection failed with error: %d\n", so_error);
-            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection failed with error " + so_error);
         }
     }
     else {
         printf("Connection timed out or failed.\n");
-        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"The connection timed out or failed");
     }
 
     // Cleanup on failure

@@ -9,41 +9,28 @@
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 
-/*
-// Initialize handles (Declaration)
-HANDLE guiReadyEvent = NULL; // Initialization at declaration
-
-        // Create an event to signal when the GUI is ready
-        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
-        if (guiReadyEvent == NULL) {
-            wprintf(L"Could not create the guiReady event\n");
-        }
-
-        // After setting up the GUI and just before starting the message loop:
-        if (guiReadyEvent != NULL) {
-            SetEvent(guiReadyEvent);
-        }
-
-        WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
-*/
-
-HINSTANCE g_hInst = NULL;  // Definition
-HINSTANCE g_hInst_client = NULL;  // Definition
-HINSTANCE g_hInst_server = NULL;  // Definition
-
-// Default values for the client and server Windows
-int DEFAULT_WIDTH = 760;
-int DEFAULT_HEIGHT = 255;
-int FONT_SIZE = 18;
-
-HWND hStaticServer = NULL; // Handle to your server edit control
-HWND hStaticClient = NULL; // Handle to your client edit control
-
 // Function prototypes
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+// Global variables
+HINSTANCE g_hInst = NULL;  // Definition
+HINSTANCE g_hInst_client = NULL;  // Definition
+HINSTANCE g_hInst_server = NULL;  // Definition
+
+// Event handle for GUI ready
+HANDLE guiReadyEvent = NULL; // Initialization at declaration
+
+// Static control handles
+HWND hStaticServer = NULL; // Handle to your server edit control
+HWND hStaticClient = NULL; // Handle to your client edit control
+
+// Default values for the client and server Windows
+int DEFAULT_WIDTH = 760;
+int DEFAULT_HEIGHT = 255;
+int FONT_SIZE = 18;
 
 // Message loop for client and server
 MSG msg_client = { 0 };
@@ -90,7 +77,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
         else {
             std::wstring message = L"Invalid mode entered. Application will exit.";
-            MessageBoxW(NULL, message.c_str(), L"Error", MB_ICONERROR);
+            MessageBox(NULL, message.c_str(), L"Error", MB_ICONERROR);
             return -1; // Exit application due to invalid input
         }
     }
@@ -131,7 +118,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         // Show the console window
         if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Client Console");
 
-
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey Client";
         wchar_t const* className = L"AceApp";
@@ -148,80 +134,96 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Client Window
         HWND hWndClient = CreateWindowEx(
-            WS_EX_APPWINDOW,  // No extended window styles.
-            className,        // Pointer to registered class name.
-            windowName,       // Pointer to window name.
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
-            CW_USEDEFAULT,    // Use the system's default horizontal position.
-            CW_USEDEFAULT,    // Use the system's default vertical position.
-            800,    // Use the system's default width.
-            600,    // Use the system's default height.
-            nullptr,          // No parent window.
-            nullptr,          // Use the class menu.
-            hInstance,        // Handle to application instance.
-            nullptr           // No additional window data.
+            WS_EX_APPWINDOW,                    // No extended window styles.
+            className,                          // Pointer to registered class name.
+            windowName,                         // Pointer to window name.
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,   // Window style.
+            CW_USEDEFAULT,                      // Use the system's default horizontal position.
+            CW_USEDEFAULT,                      // Use the system's default vertical position.
+            800,                                // Use the system's default width.
+            600,                                // Use the system's default height.
+            nullptr,                            // No parent window.
+            nullptr,                            // Use the class menu.
+            hInstance,                          // Handle to application instance.
+            nullptr                             // No additional window data.
         );
 
         // Check if the Main Client Window was created successfully.
         if (!hWndClient) {
+            wprintf(L"Could not create main window for server\n");
             return -1; // Handle main window creation failure.
         }
 
         // Create a static control for displaying text (replaces the edit control).
-        HWND hStaticClient = CreateWindowEx(
-            0,                  // No extended window styles.
-            L"STATIC",          // STATIC control class.
-            L"",                // Initial text - this will be changed dynamically.
-            WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles.
-            8,                 // x-coordinate of the upper-left corner.
-            8,                 // y-coordinate of the upper-left corner.
-            400,                // Width; adjusted for padding.
-            300,                 // Height; enough for one line of text, adjust as needed.
-            hWndClient,         // Handle to the parent window.
-            (HMENU)IDC_MAIN_DISPLAY_TEXT, // Control ID, ensure it's unique and doesn't conflict with existing IDs.
-            hInstance,          // Handle to application instance.
-            NULL                // No additional window data.
+        hStaticClient = CreateWindowEx(
+            0,                                  // No extended window styles.
+            L"STATIC",                          // STATIC control class.
+            L"",                                // Initial text - this will be changed dynamically.
+            WS_CHILD | WS_VISIBLE | SS_LEFT,    // Static control styles.
+            8,                                  // x-coordinate of the upper-left corner.
+            8,                                  // y-coordinate of the upper-left corner.
+            400,                                // Width; adjusted for padding.
+            300,                                // Height; enough for one line of text, adjust as needed.
+            hWndClient,                         // Handle to the parent window.
+            (HMENU)IDC_MAIN_DISPLAY_TEXT,       // Control ID, ensure it's unique and doesn't conflict with existing IDs.
+            hInstance,                          // Handle to application instance.
+            NULL                                // No additional window data.
         );
 
         // Check if the static control was created successfully.
         if (!hStaticClient) {
+            wprintf(L"Could not create static control for client\n");
             return -1; // Handle static control creation failure.
         }
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            18,               // Font height.
-            0,                // Average character width.
-            0,                // Angle of escapement.
-            0,                // Base-line orientation angle.
-            FW_NORMAL,        // Font weight.
-            FALSE,            // Italic attribute option.
-            FALSE,            // Underline attribute option.
-            FALSE,            // Strikeout attribute option.
-            DEFAULT_CHARSET,  // Character set identifier.
-            OUT_DEFAULT_PRECIS, // Output precision.
-            CLIP_DEFAULT_PRECIS, // Clipping precision.
-            CLEARTYPE_QUALITY,   // Output quality.
-            VARIABLE_PITCH | FF_SWISS, // Pitch and family.
-            L"Segoe UI"       // Font typeface name.
+            18,                                 // Font height.
+            0,                                  // Average character width.
+            0,                                  // Angle of escapement.
+            0,                                  // Base-line orientation angle.
+            FW_NORMAL,                          // Font weight.
+            FALSE,                              // Italic attribute option.
+            FALSE,                              // Underline attribute option.
+            FALSE,                              // Strikeout attribute option.
+            DEFAULT_CHARSET,                    // Character set identifier.
+            OUT_DEFAULT_PRECIS,                 // Output precision.
+            CLIP_DEFAULT_PRECIS,                // Clipping precision.
+            CLEARTYPE_QUALITY,                  // Output quality.
+            VARIABLE_PITCH | FF_SWISS,          // Pitch and family.
+            L"Segoe UI"                         // Font typeface name.
         );
 
         // Check if the Main Client Window was created successfully.
         if (!hFontStatic) {
+            wprintf(L"Could not create static font control for client\n");
             return -1; // Handle main window creation failure.
         }
 
         SendMessage(hStaticClient, WM_SETFONT, (WPARAM)hFontStatic, TRUE);
 
-        // Connection attempt
-        if (!establishConnection()) {
-            // Get the IP address of the server
-            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Trying to establish a connection to " + serverIPconf.c_str());
-            wprintf(L"Trying to establish a connection to IP Address: %s\n", serverIPconf.c_str());
+        // Create an event to signal when the GUI is ready
+        guiReadyEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Manual-reset event, initially non-signaled
+        if (guiReadyEvent == NULL) {
+            wprintf(L"Could not create the guiReady event\n");
+        }
+
+        // After setting up the GUI and just before starting the message loop:
+        if (guiReadyEvent != NULL) {
+            SetEvent(guiReadyEvent);
+        }
+
+        if (guiReadyEvent != NULL) {
+            WaitForSingleObject(guiReadyEvent, INFINITE);
         }
         else {
-            wprintf(L"Connection already established\n");
+            wprintf(L"Error with the GUI ready event.\n");
         }
+
+        // Se we dont lock the GUI thread, we will start the connection in a separate thread
+        clientConnectionThread(); // Start the client connection
+
+        wprintf(L"LA CAGASTE con el client\n");
 
         // This is our window loop for the client
         if(DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
@@ -260,66 +262,69 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Server Window
         HWND hWndServer = CreateWindowEx(
-            WS_EX_APPWINDOW,  // Extended window styles.
-            className,        // Pointer to registered class name.
-            windowName,       // Pointer to window name.
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style.
-            CW_USEDEFAULT,    // Use the system's default horizontal position.
-            CW_USEDEFAULT,    // Use the system's default vertical position.
-            800,        // Use the system's default width.
-            600,   // Use the system's default height.
-            NULL,             // No parent window.
-            NULL,             // No menu.
-            hInstance,        // Handle to application instance.
-            NULL              // No additional window data.
+            WS_EX_APPWINDOW,                        // Extended window styles.
+            className,                              // Pointer to registered class name.
+            windowName,                             // Pointer to window name.
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,       // Window style.
+            CW_USEDEFAULT,                          // Use the system's default horizontal position.
+            CW_USEDEFAULT,                          // Use the system's default vertical position.
+            800,                                    // Use the system's default width.
+            600,                                    // Use the system's default height.
+            NULL,                                   // No parent window.
+            NULL,                                   // No menu.
+            hInstance,                              // Handle to application instance.
+            NULL                                    // No additional window data.
         );
 
         // Check if the Main Server Window was created successfully.
         if (!hWndServer) {
+            wprintf(L"Could not create main window for server\n");
             return -1; // Handle main window creation failure.
         }
 
         // Create a static control for the server window to display messages.
-        HWND hStaticServer = CreateWindowEx(
-            0,                  // No extended window styles.
-            L"STATIC",          // STATIC control class for display.
-            L"",                // Initial text - can be updated dynamically.
-            WS_CHILD | WS_VISIBLE | SS_LEFT, // Static control styles for text display.
-            8,                 // x-coordinate of the upper-left corner.
-            8,                 // y-coordinate of the upper-left corner.
-            400,      // Width of the control; adjusted for padding.
-            300,     // Height of the control; enough for one line of text, adjust as needed.
-            hWndServer,         // Handle to the parent window.
-            (HMENU)IDC_STATIC_SERVER_TEXT, // Control ID, use a unique identifier.
-            hInstance,          // Handle to the instance.
-            NULL                // No additional window data.
+        hStaticServer = CreateWindowEx(
+            0,                                      // No extended window styles.
+            L"STATIC",                              // STATIC control class for display.
+            L"",                                    // Initial text - can be updated dynamically.
+            WS_CHILD | WS_VISIBLE | SS_LEFT,        // Static control styles for text display.
+            8,                                      // x-coordinate of the upper-left corner.
+            8,                                      // y-coordinate of the upper-left corner.
+            400,                                    // Width of the control; adjusted for padding.
+            300,                                    // Height of the control; enough for one line of text, adjust as needed.
+            hWndServer,                             // Handle to the parent window.
+            (HMENU)IDC_STATIC_SERVER_TEXT,          // Control ID, use a unique identifier.
+            hInstance,                              // Handle to the instance.
+            NULL                                    // No additional window data.
         );
 
         // Check if the static control was created successfully.
         if (!hStaticServer) {
+            wprintf(L"Could not create static control for server\n");
             return -1; // Handle static control creation failure.
         }
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            20,        // Font height.
-            0,                // Average character width.
-            0,                // Angle of escapement.
-            0,                // Base-line orientation angle.
-            FW_NORMAL,        // Font weight.
-            FALSE,            // Italic attribute option.
-            FALSE,            // Underline attribute option.
-            FALSE,            // Strikeout attribute option.
-            DEFAULT_CHARSET,  // Character set identifier.
-            OUT_DEFAULT_PRECIS, // Output precision.
-            CLIP_DEFAULT_PRECIS, // Clipping precision.
-            CLEARTYPE_QUALITY,   // Output quality.
-            VARIABLE_PITCH | FF_SWISS, // Pitch and family.
-            L"Segoe UI"       // Font typeface name.
+            20,                                     // Font height.
+            0,                                      // Average character width.
+            0,                                      // Angle of escapement.
+            0,                                      // Base-line orientation angle.
+            FW_NORMAL,                              // Font weight.
+            FALSE,                                  // Italic attribute option.
+            FALSE,                                  // Underline attribute option.
+            FALSE,                                  // Strikeout attribute option.
+            DEFAULT_CHARSET,                        // Character set identifier.
+            OUT_DEFAULT_PRECIS,                     // Output precision.
+            CLIP_DEFAULT_PRECIS,                    // Clipping precision.
+            CLEARTYPE_QUALITY,                      // Output quality.
+            VARIABLE_PITCH | FF_SWISS,              // Pitch and family.
+            L"Segoe UI"                             // Font typeface name.
         );
 
         // Check if the static control was created successfully.
         if (!hFontStatic) {
+            wprintf(L"Could not create static font control for server\n");
             return -1; // Handle static control creation failure.
         }
 
@@ -336,23 +341,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             SetEvent(guiReadyEvent);
         }
 
-        WaitForSingleObject(guiReadyEvent, INFINITE); // Wait for GUI to be ready before proceeding.
-            
-        // Check if the server is already running
-        if (isServerUp()) {
-            wprintf(L"Could not start server. Port is already in use, restart your computer\n");
-            MessageBox(NULL, L"Could not start server. Port is already in use, restart your computer.", L"Network Error", MB_ICONERROR | MB_OK);
-            SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Could not start server. Port is already in use, restart your computer");
+        if (guiReadyEvent != NULL) {
+            WaitForSingleObject(guiReadyEvent, INFINITE);
         }
         else {
-            // Attempt to start the server
-            if (!initializeServer()) {
-                MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-            }
-            else {
-                SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is starting...");
-            }
+            wprintf(L"Error with the GUI ready event.\n");
         }
+         
+        // Start the server in a separate thread to avoid blocking the main thread
+        serverStartThread(); // Start the server in a separate thread
 
         // This is the server window loop
         if (DEBUG) wprintf(L"GUI WindowProcess loop starting. We can now send messages to the server GUI.\n");
@@ -363,7 +360,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
 
         // For server mode, insert cleanup operations here
-        serverRunning = false;
         wprintf(L"Closing server connection\n");
         cleanupServer();
 
@@ -371,18 +367,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         exitCode = (int)msg_server.wParam;
     }
     else {
-        MessageBoxA(NULL, "Mode not set. Application will now exit.", "Error", MB_ICONERROR);
+        MessageBox(NULL, L"Mode not set. Application will now exit.", L"Error", MB_ICONERROR);
         wprintf(L"Application exiting due to invalid input or incorrect ini file\n");
         return -1; // Exit application due to invalid input or incorrect ini file
     }
 
-
-    if (!guiReadyEvent == NULL) 
+    if (guiReadyEvent != NULL)
         CloseHandle(guiReadyEvent); // Close the event handle
-
-    // This is for BOTH client and server
-    cleanupWinsock();
-    wprintf(L"Winsock cleanup and exiting program\n");
 
     return exitCode; // Return the exit code
 }
@@ -462,12 +453,7 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             break;
         case ID_CLIENT_CONNECT: {
             closeClientConnection(); // Close the existing connection if any and re-establish
-            if (!establishConnection()) {
-                wprintf(L"Trying to establish a connection to IP Address: %s\n", serverIPconf.c_str());
-            }
-            else {
-                wprintf(L"Connection was already established to IP Address: %s\n", serverIPconf.c_str());
-			}
+            clientConnectionThread(); // Start the client connection
             break;
         }
         case ID_CLIENT_EXIT:
@@ -523,13 +509,15 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_CLOSE: {
         closeClientConnection(); // For client;
-        cleanupWinsock();
         // Destroy the window to close it
         DestroyWindow(hWnd);
         return 0; // Indicate that we handled the message
     }
     case WM_DESTROY:
-        CloseHandle(guiReadyEvent);
+
+        if (guiReadyEvent != NULL)
+            CloseHandle(guiReadyEvent);
+
         PostQuitMessage(0);
         break;
     default:
@@ -554,14 +542,20 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             break;
         case ID_SERVER_CONNECT:
             if (isServerUp()) {
-                MessageBox(NULL, L"Server is already running", L"Error", MB_ICONERROR | MB_OK);
-            }
+
+                // Fetch the IP address as a std::wstring
+                std::wstring serverIP = getServerIPAddress();
+
+                // Create the message to be sent
+                std::wstring portStr = std::to_wstring(port);
+                std::wstring message = L"Server is already running on IP address " + serverIP + L" TCP port " + portStr;
+                SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)message.c_str());
+
+				}
             else {
-				if (!initializeServer())
-					MessageBox(NULL, L"Failed to start server. Try restarting this computer and if problem persists contact the author.", L"Network Error", MB_ICONERROR | MB_OK);
-				else
-					MessageBox(NULL, L"Server started succesfully", L"Connected", MB_ICONINFORMATION | MB_OK);
-			}
+                serverStartThread(); // Start the server in a separate thread
+            }
+            
             break;
         case ID_CLIENT_EXIT:
             DestroyWindow(hWnd);
@@ -573,15 +567,16 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         break; // End of WM_COMMAND
     }
     case WM_CLOSE: {
-        serverRunning = false;
-        cleanupServer();
-        cleanupWinsock();
+        // serverRunning = false;
+        // cleanupServer();
         // Destroy the window to close it
         DestroyWindow(hWnd);
         return 0; // Indicate that we handled the message
     }
     case WM_DESTROY:
-        CloseHandle(guiReadyEvent);
+        if (guiReadyEvent != NULL)
+            CloseHandle(guiReadyEvent);
+
         PostQuitMessage(0); // Signal to end the application
         break;
     default:
