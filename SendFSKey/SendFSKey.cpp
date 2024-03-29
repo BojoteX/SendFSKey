@@ -562,20 +562,6 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-
-
-    case WM_SIZE:
-        if (wp == SIZE_MINIMIZED) {
-            MinimizeToTray(hWnd);
-            ShowWindow(hWnd, SW_HIDE); // Hide the window
-        }
-        break;
-    case WM_TRAYICON: {
-        if (lp == WM_LBUTTONDOWN) { // Restore on left-click
-            RestoreFromTray(hWnd);
-        }
-        break;
-    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
@@ -659,6 +645,20 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+
+    case WM_SIZE:
+        if (wp == SIZE_MINIMIZED) {
+            MinimizeToTray(hWnd);
+            ShowWindow(hWnd, SW_HIDE); // Hide the window
+        }
+        break;
+    case WM_TRAYICON: {
+        if (lp == WM_LBUTTONDOWN) { // Restore on left-click
+            RestoreFromTray(hWnd);
+        }
+        break;
+    }
+
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
