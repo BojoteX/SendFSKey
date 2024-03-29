@@ -223,8 +223,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         // Se we dont lock the GUI thread, we will start the connection in a separate thread
         clientConnectionThread(); // Start the client connection
 
-        wprintf(L"LA CAGASTE con el client\n");
-
         // This is our window loop for the client
         if(DEBUG) wprintf(L"GUI WindowProcess loop starting for the client. We can now send messages to the client GUI.\n");
 

@@ -29,7 +29,7 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown);
 UINT ServerKeyPressDOWN(UINT KeyCode); // Used by server to send key presses
 UINT ServerKeyPressUP(UINT KeyCode); // Used by server to send key releases
 
-// To shutdown or start from anywhere and clean
+// Server functions
 void serverStartThread();
 void cleanupServer();
 void shutdownServer();

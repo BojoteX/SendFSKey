@@ -1,3 +1,4 @@
+#include <mutex> 
 #include <thread>
 #include <ws2tcpip.h>
 #include "NetworkClient.h"
@@ -6,6 +7,8 @@
 const char* EXPECTED_SERVER_SIGNATURE = "SendFSKeySSv1";
 
 SOCKET g_persistentSocket = INVALID_SOCKET; // Global persistent socket
+
+std::atomic<bool> isReconnecting(false);
 
 // Initialize Winsock
 bool initializeWinsock() {
@@ -41,11 +44,20 @@ bool verifyServerSignature(SOCKET serverSocket) {
 
 void clientConnectionThread() {
     // Establish the connection
-    std::thread clientThread(establishConnection);
+    std::thread clientThread(establishConnection);  // pass false when not retrying connection so that it shows the MessageBox
     clientThread.detach(); // Detach the thread to handle the client independently
 }
 
 bool establishConnection() {
+
+    // Create the message to be sent
+    std::wstring message = L"Trying to connect to " + serverIPconf;
+
+    // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
+    SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)message.c_str());
+
+    // Always close the existing connection before attempting to establish a new one
+    closeClientConnection();
 
     if (g_persistentSocket != INVALID_SOCKET) {
         printf("The connection is already established.\n");
@@ -112,14 +124,26 @@ bool establishConnection() {
                 return false;
             }
 
+            // Create the message to be sent
+            std::wstring message = L"Connected succesfully to " + serverIPconf;
+
+            // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)message.c_str());
+
             return true; // Connection and verification successful
         }
         else {
             printf("Connection failed with error: %d\n", so_error);
+            // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection failed with error " + so_error);
         }
     }
     else {
         printf("Connection timed out or failed.\n");
+        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection timed out or failed");
+
+        if(!isReconnecting)
+            MessageBox(NULL, L"Failed to connect to server.", L"Network Error", MB_ICONERROR | MB_OK);
     }
 
     // Cleanup on failure
@@ -131,12 +155,85 @@ bool establishConnection() {
 // Close the persistent connection
 void closeClientConnection() {
     if (g_persistentSocket != INVALID_SOCKET) {
+        SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Closing connection.");
         closesocket(g_persistentSocket);
         g_persistentSocket = INVALID_SOCKET;
     }
+
 }
 
 void sendKeyPress(UINT keyCode, bool isKeyDown) {
+    std::wstring sent_message = L"Virtual-Key Code sent: (" + std::to_wstring(keyCode) + L")";
+
+    unsigned char buffer[5];
+    buffer[0] = isKeyDown ? 'D' : 'U'; // Event type flag
+
+    // Ensure little-endian byte order for the keyCode
+    memcpy(buffer + 1, &keyCode, sizeof(keyCode));
+
+    auto reconnectAndResend = [buffer, isKeyDown, sent_message]() mutable {
+
+        std::this_thread::sleep_for(std::chrono::seconds(2)); // Pause before attempting to reconnect
+
+        if (!isReconnecting.exchange(true)) {
+            printf("Connection error. Attempting to reconnect...\n");
+            closeClientConnection(); // Close the old connection
+
+            bool isConnected = false;
+            while (!isConnected) {
+                Sleep(5000); // Wait for 5 seconds before retrying
+
+                isConnected = establishConnection();
+                if (!isConnected) {
+                    printf("Reconnect attempt failed. Waiting 5 seconds before retrying...\n");
+                }
+            }
+
+            // Clear the buffer before resending to avoid sending old data or garbage
+            // memset(buffer, 0, sizeof(buffer));
+
+            printf("Reconnection successful. Resending data...\n");
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Reconnection successful. Resending data...");
+
+            if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
+                printf("Failed to send data after reconnecting.\n");
+                SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Failed to send data after reconnecting.");
+            }
+            else {
+                char ack;
+                recv(g_persistentSocket, &ack, sizeof(ack), 0); // Await acknowledgment
+                if (isKeyDown) {
+                    SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)sent_message.c_str());
+                }
+            }
+
+            isReconnecting = false; // Reset the flag once reconnection is complete
+        }
+    };
+
+    // First attempt to send the key event
+    if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
+
+        // Use threading but can't read keyup events
+        std::thread(reconnectAndResend).detach(); // Handle reconnection in a detached thread
+
+        // Or Syncronously (which solves the re-sending issue)
+        // reconnectAndResend();
+    }
+    else {
+        // If send was successful, wait for server acknowledgment
+        char ack;
+        recv(g_persistentSocket, &ack, sizeof(ack), 0); // Blocking call until ack is received
+
+        // Message sent
+        if (isKeyDown)
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)sent_message.c_str());
+    }
+}
+
+void sendKeyPressOLD(UINT keyCode, bool isKeyDown) {
+    std::wstring sent_message = L"Virtual-Key Code sent: (" + std::to_wstring(keyCode) + L")";
+
     unsigned char buffer[5];
     buffer[0] = isKeyDown ? 'D' : 'U'; // Event type flag
 
@@ -156,7 +253,7 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         for (int attempts = 0; attempts < 5 && !isConnected; attempts++) {
             Sleep((1 << attempts) * 1000); // Exponential backoff
 
-            isConnected = establishConnection(); // Tries to reconnect and updates g_persistentSocket on success
+            isConnected = establishConnection(); // pass true when retrying connection so that it doesn't show the MessageBox
             if (!isConnected) {
                 printf("Reconnect attempt %d failed. Waiting %d seconds before retrying...\n", attempts + 1, (1 << attempts));
             }
@@ -165,20 +262,30 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         // Check if reconnection was successful
         if (isConnected) {
             printf("Reconnection successful. Resending data...\n");
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Reconnection successful. Resending data...");
+
             // After reconnecting, try sending the signature again
 
             if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
                 printf("Failed to send data after reconnecting.\n");
+                SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Failed to send data after reconnecting.");
                 // Handle failure to resend data here
             }
             else {
                 char ack;
                 recv(g_persistentSocket, &ack, sizeof(ack), 0); // Await acknowledgment
+
+                // Message sent
+
+                if (isKeyDown)
+                    SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)sent_message.c_str());
             }
         }
         else {
             MessageBox(NULL, L"Failed to reconnect to server after multiple attempts. Exiting.", L"Network Error", MB_ICONERROR | MB_OK);
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Failed to reconnect to server.");
 
+            closeClientConnection();
             cleanupWinsock();
             printf("Closing connection and doing cleanup before exiting.\n");
             ExitProcess(1); // Terminate application if unable to reconnect after max attempts
@@ -188,6 +295,10 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         // If send was successful, wait for server acknowledgment
         char ack;
         recv(g_persistentSocket, &ack, sizeof(ack), 0); // Blocking call until ack is received
+
+        // Message sent
+        if(isKeyDown)
+            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)sent_message.c_str());
     }
 }
 

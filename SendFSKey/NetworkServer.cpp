@@ -97,8 +97,6 @@ void handleClient(SOCKET clientSocket) {
         // Send acknowledgment back to the client
         char ack = 1;
         send(clientSocket, &ack, sizeof(ack), 0);
-
-        printf("Running...\n");
     }
 
     printf("Client socket closed.\n");
@@ -129,9 +127,9 @@ void startServer() {
             std::string ipStr(clientIPStr); // Convert char* to std::string
             std::wstring wideIP(ipStr.begin(), ipStr.end()); // Convert std::string to std::wstring for UI
 
-            std::wstring formattedMessage = L"Received connection from: " + wideIP + L"\r\n";
-            wprintf(L"Received connection from: %s\n", wideIP.c_str());
-            SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Received new connection..");
+            std::wstring formattedMessage = L"Connection from " + wideIP;
+            wprintf(L"Connection from %s\n", wideIP.c_str());
+            SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)formattedMessage.c_str());
 
             // Send the server signature immediately after accepting the connection
             send(clientSocket, SERVER_SIGNATURE, static_cast<int>(strlen(SERVER_SIGNATURE)), 0);
@@ -151,12 +149,14 @@ bool initializeServer() {
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         printf("WSAStartup failed: %d\n", iResult);
+        SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Startup failed (see console)");
         return false;
     }
 
     g_listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (g_listenSocket == INVALID_SOCKET) {
         printf("Error at socket(): %ld\n", WSAGetLastError());
+        SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Startup failed (see console)");
         WSACleanup();
         return false;
     }
@@ -168,6 +168,7 @@ bool initializeServer() {
 
     if (bind(g_listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         printf("bind failed with error: %d\n", WSAGetLastError());
+        SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Startup failed (see console)");
         closesocket(g_listenSocket);
         WSACleanup();
         return false;
@@ -175,6 +176,7 @@ bool initializeServer() {
 
     if (listen(g_listenSocket, SOMAXCONN) == SOCKET_ERROR) {
         printf("listen failed with error: %d\n", WSAGetLastError());
+        SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Startup failed (see console)");
         closesocket(g_listenSocket);
         WSACleanup();
         return false;
@@ -194,7 +196,7 @@ bool initializeServer() {
     std::wstring serverIP = getServerIPAddress();
 
     // Create the message to be sent
-    std::wstring message = L"Server started on IP address: " + serverIP;
+    std::wstring message = L"Server started on IP address " + serverIP;
 
     // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
     SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)message.c_str());
@@ -214,9 +216,8 @@ void shutdownServer() {
     SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)L"Server is shutting down...");
 
     // Give time for the server to shut down
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for 1 second so the server can shut down
     serverRunning = false; // Set the server running flag to false so it exits the loop and I can clean up and close the server
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for 1 second so the server can shut down
+    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for 1 second so the server can shut down
 
     closesocket(g_listenSocket);
     WSACleanup();
