@@ -1,13 +1,10 @@
 // SendInput.cpp
 #include <stdio.h>
 #include <Windows.h>
+#include "Globals.h"
 
 // Change how we send the keys
 bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with keys like SHIFT so we never use it)
-int EXTENDED_DEBUG = 0;
-
-// Our target MSFS Window
-const char* MSFSclassName = "AceApp";
 
 // Function to check if the specified window by class name is the foreground window
 bool IsWindowInFocusByClassName(const char* MSFSclassName) {
@@ -16,8 +13,8 @@ bool IsWindowInFocusByClassName(const char* MSFSclassName) {
 }
 
 // Function to bring the specified window by class name to the foreground if it's not already
-bool BringWindowToForegroundByClassName(const char* MSFSclassName) {
-    HWND hwndTarget = FindWindowA(MSFSclassName, NULL); // Window title is NULL since we're using class name
+bool BringWindowToForegroundByClassName(const wchar_t* MSFSclassName) {
+    HWND hwndTarget = FindWindowW(NULL, MSFSclassName); // Use FindWindowW for wide characters, class name is now the second parameter
     if (hwndTarget == NULL) {
         // Window not found
         return false;
@@ -45,7 +42,7 @@ UINT ScanCodeRelease(UINT KeyCode) {
     // Send the KEY_UP
     SendInput(1, &ip, sizeof(INPUT));
 
-    if (EXTENDED_DEBUG) printf("[FORCED SCAN_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
+    if (DEBUG) printf("[FORCED SCAN_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
 
     return 1;
 }
@@ -63,7 +60,7 @@ UINT KeyRelease(UINT KeyCode) {
     // Send the KEY_UP
     SendInput(1, &ip, sizeof(INPUT));
 
-    if (EXTENDED_DEBUG) printf("[FORCED VK_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
+    if (DEBUG) printf("[FORCED VK_CODE RELEASE] SendInput: KEY_UP sent: %u\n", KeyCode);
 
     return 1;
 }
@@ -149,7 +146,7 @@ UINT SendUPKeyWithoutScanCode(UINT virtualKeyCode) {
 UINT ServerKeyPressDOWN(UINT KeyCode) {
 
     // We only want to send the key press if the MSFS window is in focus, if not, we bring it to focus
-    BringWindowToForegroundByClassName(MSFSclassName);
+    BringWindowToForegroundByClassName(target_window.c_str());
 
     if (USE_SCAN_CODE) {
         SendDOWNKeyWithScanCode(KeyCode);
@@ -169,7 +166,7 @@ UINT ServerKeyPressUP(UINT KeyCode) {
         SendUPKeyWithoutScanCode(KeyCode);
     }
     
-    if (EXTENDED_DEBUG) {
+    if (DEBUG) {
         // Slight pause after the key up to see what got stuck
         Sleep(25);
         for (int key = 0; key <= 0xFF; ++key) {

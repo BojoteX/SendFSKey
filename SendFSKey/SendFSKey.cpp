@@ -45,12 +45,16 @@ wchar_t const* windowName;
 wchar_t const* className;
 
 // Operation mode
-std::wstring consoleVisibility;
 bool isClientMode;
-bool DEBUG = FALSE;
 
 // Our ini file path
 std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini"; // Build the full INI file path
+
+// Initialize App Version Info
+std::wstring companyName = GetSimpleVersionInfo(L"CompanyName");
+std::wstring productName = GetSimpleVersionInfo(L"ProductName");
+std::wstring legalCopyright = GetSimpleVersionInfo(L"LegalCopyright");
+std::wstring productVersion = GetSimpleVersionInfo(L"ProductVersion");
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -101,22 +105,58 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
     }
 
-    // Assume iniPath is already defined and holds the path to your INI file
-    wchar_t visibilityBuffer[5]; // Enough for "true" or "false"
+    // Get Visibility setting
+    wchar_t visibilityBuffer[5]; // Enough for "Yes" or "No"
     GetPrivateProfileStringW(L"Settings", L"ConsoleVisibility", L"Yes", visibilityBuffer, 5, iniPath.c_str());
     std::wstring consoleVisibility = visibilityBuffer;
 
-    // Initialize Winsock for both client and server
-    if (!initializeWinsock()) {
-        return -1; // Exit if Winsock initialization fails
+    // Get Queuing setting
+    wchar_t use_queuingBuffer[5]; // Enough for "true" or "false"
+    GetPrivateProfileStringW(L"Settings", L"UseQueing", L"No", use_queuingBuffer, 5, iniPath.c_str());
+    use_queuing = use_queuingBuffer;
+
+    if (use_queuing == L"Yes") {
+        queueKeys = TRUE;
+        maxQueueSize = 4;
+    }
+    else {
+        queueKeys = FALSE;
+        maxQueueSize = 0;
     }
 
+    // Get Target Window setting
+    wchar_t target_windowBuffer[256]; // Enough for long names
+    GetPrivateProfileStringW(L"Settings", L"TargetWindow", L"AceApp", target_windowBuffer, 256, iniPath.c_str());
+    target_window = target_windowBuffer;
+    
+    // Get App process name
+    wchar_t app_processBuffer[256]; // Enough for long names
+    GetPrivateProfileStringW(L"Settings", L"AppProcess", L"FlightSimulator.exe", app_processBuffer, 256, iniPath.c_str());
+    app_process = app_processBuffer;
+
+    // Adjust the buffer size to 2 to accommodate one character plus a null terminator
+    wchar_t DEBUGBuffer[2]; // Enough for "0" or "1" plus a null terminator
+    GetPrivateProfileStringW(L"Settings", L"Debug", L"0", DEBUGBuffer, _countof(DEBUGBuffer), iniPath.c_str());
+
+    // Convert the first character of DEBUGBuffer to a bool
+    DEBUG = (DEBUGBuffer[0] == L'1');
+
     int exitCode = 0; // Default exit code
+
+    // Dont Modify anything BELOW this line...
 
     if (isClientMode) {
 
         // Show the console window
         if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Client Console");
+
+        if (DEBUG)
+            wprintf(L" *** CLIENT DEBUG MODE ENABLED ***\n");
+
+        // Initialize Winsock for both client and server
+        if (!initializeWinsock()) {
+            return -1; // Exit if Winsock initialization fails
+        }
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"Microsoft Flight Simulator - SendFSKey Client";
@@ -128,6 +168,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         wc.lpszClassName = className;
         wc.lpfnWndProc = ClientWindowProc;
         wc.lpszMenuName = MAKEINTRESOURCE(IDR_CLIENTMENU);
+        wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SENDFSKEY));
         wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
         if (!RegisterClass(&wc)) return -1;
@@ -244,6 +285,28 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         if (consoleVisibility == L"Yes") ToggleConsoleVisibility(L"SendFSKey - Server Console");
 
+        if (DEBUG)
+            wprintf(L" *** SERVER DEBUG MODE ENABLED ***\n");
+
+        // Initialize Winsock for both client and server
+        if (!initializeWinsock()) {
+            return -1; // Exit if Winsock initialization fails
+        }
+
+        // Check if the application has sufficient privileges
+        CheckApplicationPrivileges();
+
+        /*
+        if (!is_flightsimulator_running) {
+            MessageBox(NULL, L"Flight Simulator is NOT running, server will shutdown", L"Permission Error", MB_ICONERROR);
+            return -1; // Exit if we don't have permission
+        }
+        */
+
+        if (!has_permission) {
+            MessageBox(NULL, L"Insufficient privileges to send input to Flight Simulator. Please run this application as an administrator or add the application to your Flight Simulator exe.xml.", L"Permission Error", MB_ICONERROR);
+        }
+
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey - Server";
         wchar_t const* className = L"BojoteApp";
@@ -254,6 +317,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         ws.lpszClassName = className;
         ws.lpfnWndProc = ServerWindowProc;
         ws.lpszMenuName = MAKEINTRESOURCE(IDC_SENDFSKEY_SERVER);
+        ws.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SENDFSKEY));
         ws.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
         if (!RegisterClass(&ws)) return -1;
@@ -381,9 +445,20 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
     UNREFERENCED_PARAMETER(lParam);
     switch (message)
     {
-    case WM_INITDIALOG:
-        return (INT_PTR)TRUE;
+    case WM_INITDIALOG: {
 
+        SetDlgItemTextW(hDlg, IDC_COMPANYNAME, companyName.c_str());
+        SetDlgItemTextW(hDlg, IDC_APPNAME, productName.c_str());
+        SetDlgItemTextW(hDlg, IDC_APPCOPYRIGHT, legalCopyright.c_str());
+        SetDlgItemTextW(hDlg, IDC_APPVERSION, productVersion.c_str());
+
+        HICON hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY));
+        if (hIcon)
+        {
+            SendDlgItemMessage(hDlg, IDC_MYICON, STM_SETICON, (WPARAM)hIcon, 0);
+        }
+        return (INT_PTR)TRUE;
+    }
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
@@ -399,11 +474,20 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_INITDIALOG: {
+
         // Set the default values or configurations for your dialog controls here
         HWND hwndCombo = GetDlgItem(hDlg, IDC_COMBOBOX); // Replace with your combo box ID
         SendMessage(hwndCombo, CB_ADDSTRING, 0, (LPARAM)L"Client"); // Use wide string literals
         SendMessage(hwndCombo, CB_ADDSTRING, 0, (LPARAM)L"Server"); // Use wide string literals
-        SendMessage(hwndCombo, CB_SETCURSEL, 0, 0); // Select "Client" by default
+
+        // Set the default selection to Server
+        SendMessage(hwndCombo, CB_SETCURSEL, 1, 0); // Select "Server" by default which is the one users should always install FIRST
+
+        // Hide elements by default
+        ShowWindow(GetDlgItem(hDlg, IDC_IPADDRESS), SW_HIDE);
+        ShowWindow(GetDlgItem(hDlg, IDC_IPADDRESSTEXT), SW_HIDE);
+        ShowWindow(GetDlgItem(hDlg, IDC_IPADDRTEXT), SW_HIDE);
+
         return TRUE; // Return TRUE to set the keyboard focus to the control specified by wParam.
     }
     case WM_COMMAND: {
@@ -411,6 +495,34 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
         int wmEvent = HIWORD(wParam);
         // Parse the menu selections:
         switch (wmId) {
+
+
+        case IDC_COMBOBOX: // The ID of your combo box control
+            if (HIWORD(wParam) == CBN_SELCHANGE) {
+
+                    HWND hwndComboBox = GetDlgItem(hDlg, IDC_COMBOBOX);
+                    int selected = (int)SendMessage(hwndComboBox, CB_GETCURSEL, 0, 0);
+
+                    HWND hwndIPAddr = GetDlgItem(hDlg, IDC_IPADDRESS);
+                    HWND hwndIPAddrTxt = GetDlgItem(hDlg, IDC_IPADDRESSTEXT);
+                    HWND hwndIPAddrTxtInfo = GetDlgItem(hDlg, IDC_IPADDRTEXT);
+                    HWND hwndServerTxtInfo = GetDlgItem(hDlg, IDC_SERVERMODE_TEXT);
+
+                    // Assuming index '0' is the one where IP should be shown
+                    if (selected == 0) {
+                        ShowWindow(hwndIPAddr, SW_SHOW);
+                        ShowWindow(hwndIPAddrTxt, SW_SHOW);
+                        ShowWindow(hwndIPAddrTxtInfo, SW_SHOW);
+                        ShowWindow(hwndServerTxtInfo, SW_HIDE);
+                    }
+                    else {
+                        ShowWindow(hwndServerTxtInfo, SW_SHOW);
+                        ShowWindow(hwndIPAddr, SW_HIDE);
+                        ShowWindow(hwndIPAddrTxt, SW_HIDE);
+                        ShowWindow(hwndIPAddrTxtInfo, SW_HIDE);
+                    }
+            }
+            break;
         case IDC_OK: {
             // Change the buffer to a wide string buffer.
             wchar_t modeBuffer[7] = { 0 };
@@ -421,7 +533,14 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
                 wchar_t ipBuffer[16] = { 0 };
                 GetDlgItemText(hDlg, IDC_IPADDRESS, ipBuffer, _countof(ipBuffer)); // Again, make sure this is the wide-char version.
                 serverIPconf = ipBuffer; // This is fine as both are now wide strings.
+
+                std::wstring failMessage = L"Invalid IP address " + serverIPconf + L". Please enter the address of the computer where SendFSKey was installed in \'Server Mode\'";
+                if (!IsValidIPv4(serverIPconf)) {
+                    MessageBox(hDlg, failMessage.c_str(), L"ERROR", MB_ICONERROR);
+                    return TRUE; // Prevent dialog from closing
+                }
             }
+
             WriteSettingsToIniFile(mode, serverIPconf);
             EndDialog(hDlg, IDC_OK);
             return TRUE;
@@ -443,6 +562,20 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+
+
+    case WM_SIZE:
+        if (wp == SIZE_MINIMIZED) {
+            MinimizeToTray(hWnd);
+            ShowWindow(hWnd, SW_HIDE); // Hide the window
+        }
+        break;
+    case WM_TRAYICON: {
+        if (lp == WM_LBUTTONDOWN) { // Restore on left-click
+            RestoreFromTray(hWnd);
+        }
+        break;
+    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {

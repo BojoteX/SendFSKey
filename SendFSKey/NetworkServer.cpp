@@ -217,10 +217,11 @@ void shutdownServer() {
 
     // Give time for the server to shut down
     serverRunning = false; // Set the server running flag to false so it exits the loop and I can clean up and close the server
-    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for 1 second so the server can shut down
-
     closesocket(g_listenSocket);
     WSACleanup();
+
+    // Allow time for the server to shut down
+    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for 2 second so the server can shut down
 }
 
 bool sendData(SOCKET clientSocket, const char* data, int dataSize) {

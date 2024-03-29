@@ -1,8 +1,18 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
+#include <queue>
+#include <shellapi.h>
+
+#define WM_TRAYICON (WM_USER + 1)
+
+// For Queue management
+extern std::mutex queueMutex;
+extern std::queue<std::pair<UINT, bool>> keyEventQueue;
 
 // My Globals
+extern bool DEBUG;
 extern HANDLE guiReadyEvent;
 extern HWND hStaticServer;
 extern HWND hStaticClient;
@@ -10,12 +20,20 @@ extern HINSTANCE g_hInst;
 extern HINSTANCE g_hInst_client;
 extern HINSTANCE g_hInst_server;
 extern bool isClientMode;
-extern bool DEBUG;
-extern std::wstring mode;
-extern std::wstring serverIP;
-extern std::wstring serverIPconf;
 extern std::atomic<bool> serverRunning;
+extern std::wstring serverIP;
+extern bool queueKeys;
+extern int maxQueueSize;
+extern NOTIFYICONDATA nid;
+
+// .ini file settings
+extern std::wstring mode;
+extern std::wstring serverIPconf;
+extern std::wstring use_queuing;
+extern std::wstring target_window;
+extern std::wstring app_process;
 extern int port;
+
 
 // To use from anywhere
 void MonitorFlightSimulatorProcess();

@@ -4,15 +4,37 @@
 #include <fstream>
 #include <TlHelp32.h>
 #include <unordered_map>
+#include <shellapi.h>
 #include "Globals.h"
 
-// Settings
+// Tell the linker to include the Version library
+#pragma comment(lib, "Version.lib")
+
+// Global scope or within a class/structure as needed
+NOTIFYICONDATA nid = {}; // Zero-initialize the structure
+
+// Debug mode (.ini file will override this)
+bool DEBUG = FALSE;
+
+// .ini Settings defaults
+int port = 8028; // Default port can be changed in the INI file
 std::wstring mode = L"Server";
 std::wstring serverIPconf = L"0.0.0.0";
-int port = 8028;
+std::wstring target_window = L"AceApp";
+std::wstring app_process = L"FlightSimulator.exe";
+std::wstring use_queuing = L"No";
+
+// .ini file settings definitions only
+bool queueKeys;
+int maxQueueSize; // Maximum number of keys to queue, its hardcoded to 4 for now
+std::wstring consoleVisibility;
+
+// Global variable to check if the application has permission to send keys and check if the process is running
+bool has_permission = false;
+bool is_flightsimulator_running = false;
 
 // Required for the console window
-const size_t MAX_BUFFER_SIZE = 4096 * 10; // 10 KB, adjust as necessary, this is needed for the static control
+const size_t MAX_BUFFER_SIZE = 1024 * 10; // 10 KB, adjust as necessary, this is needed for the static control
 
 // Below are the key codes for the keys that are not standard and required conversion
 std::unordered_map<UINT, UINT> keyDownToUpMapping;
@@ -57,18 +79,23 @@ void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
             DWORD error = GetLastError();
         }
     }
+
+    // Default options
+    if (!WritePrivateProfileStringW(L"Settings", L"TargetWindow", target_window.c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
+    }
+    if (!WritePrivateProfileStringW(L"Settings", L"AppProcess", app_process.c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
+    }
+    if (!WritePrivateProfileStringW(L"Settings", L"UseQueing", use_queuing.c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
+    }
     if (!WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str())) {
         DWORD error = GetLastError();
     }
-}
-
-std::wstring FormatForDisplay(const std::string& data) {
-    // Convert std::string (assumed to be UTF-8 or ASCII) to std::wstring
-    std::wstring wideData(data.begin(), data.end());
-
-    // Format the message
-    std::wstring formattedMessage = L"Received data: " + wideData + L"\n";
-    return formattedMessage;
+    if (!WritePrivateProfileStringW(L"Settings", L"Debug", std::to_wstring(DEBUG).c_str(), iniPath.c_str())) {
+        DWORD error = GetLastError();
+    }
 }
 
 void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
@@ -81,9 +108,9 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
     }
 
     if (isSystemKey)
-        printf(" as a SYSTEM key ");
+        printf(" as SYSTEM key ");
     else {
-		printf(" as a STANDARD key ");
+		printf(" as STANDARD key ");
 	}
 
     // Attempt to use the mapped key code for KEY_UP events
@@ -138,33 +165,12 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
     sendKeyPress(keyCodeNum, isKeyDown);
 }
 
-bool isFlightSimulatorRunning() {
-    const wchar_t* flightSimulatorExe = L"FlightSimulator.exe";
-    PROCESSENTRY32 entry;
-    entry.dwSize = sizeof(PROCESSENTRY32);
-
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return false;
-
-    bool found = false;
-    if (Process32First(snapshot, &entry)) {
-        do {
-            if (_wcsicmp(entry.szExeFile, flightSimulatorExe) == 0) {
-                found = true;
-                break;
-            }
-        } while (Process32Next(snapshot, &entry));
-    }
-    CloseHandle(snapshot);
-    return (found);
-}
-
 void MonitorFlightSimulatorProcess() {
     // Flight Simulator is running, start monitoring
     std::thread([]() {
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (!isFlightSimulatorRunning()) {
+            if (!is_flightsimulator_running) {
                 // Flight Simulator is not running; initiate shutdown procedure
                 MessageBoxA(NULL, "Flight Simulator is NOT running, will now exit.", "Error", MB_ICONERROR);
                 break;
@@ -274,4 +280,156 @@ void DeleteIniFileAndRestart() {
 
     // Restart the application
     RestartApplication();
+}
+
+std::wstring GetSimpleVersionInfo(const std::wstring& infoType) {
+    wchar_t exePath[MAX_PATH];
+    if (GetModuleFileNameW(NULL, exePath, MAX_PATH) == 0) {
+        return L"Failed to get module file name";
+    }
+
+    DWORD dummy;
+    DWORD size = GetFileVersionInfoSizeW(exePath, &dummy);
+    if (size == 0) {
+        return L"Version info size not found";
+    }
+
+    std::vector<char> data(size);
+    if (!GetFileVersionInfoW(exePath, 0, size, data.data())) {
+        return L"Failed to get version info";
+    }
+
+    void* pBuf;
+    UINT len;
+    std::wstring subBlock = L"\\StringFileInfo\\040904b0\\" + infoType;
+    if (!VerQueryValueW(data.data(), subBlock.c_str(), &pBuf, &len)) {
+        return L"Information not found";
+    }
+
+    return std::wstring(reinterpret_cast<wchar_t*>(pBuf));
+}
+
+bool IsValidIPv4(const std::wstring& ip) {
+    // Immediately exclude "0.0.0.0" if it's considered invalid for your application
+    if (ip == L"0.0.0.0") {
+        return false;
+    }
+
+    int numDots = 0;
+    size_t start = 0;
+    size_t end = ip.find(L'.');
+
+    // Ensure there are exactly three dots in the IP address
+    if (std::count(ip.begin(), ip.end(), L'.') != 3) {
+        return false;
+    }
+
+    while (end != std::wstring::npos || start < ip.length()) {
+        if (end == std::wstring::npos) {
+            end = ip.length();
+        }
+
+        std::wstring octetStr = ip.substr(start, end - start);
+        if (octetStr.empty() || octetStr.length() > 3) {
+            return false; // Octet is empty or too long
+        }
+
+        for (wchar_t c : octetStr) {
+            if (!iswdigit(c)) {
+                return false; // Non-digit character found
+            }
+        }
+
+        long octet = wcstol(octetStr.c_str(), nullptr, 10);
+        if (octet < 0 || octet > 255) {
+            return false; // Octet is out of valid range
+        }
+
+        numDots += (end != ip.length());
+        start = end + 1;
+        end = ip.find(L'.', start);
+    }
+
+    return true;
+}
+
+DWORD GetProcessIntegrityLevel(HANDLE tokenHandle) {
+    DWORD integrityLevel = 0;
+    DWORD dwLengthNeeded = 0;
+    PTOKEN_MANDATORY_LABEL pTIL = NULL;
+    if (!GetTokenInformation(tokenHandle, TokenIntegrityLevel, NULL, 0, &dwLengthNeeded) && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        pTIL = (PTOKEN_MANDATORY_LABEL)LocalAlloc(LPTR, dwLengthNeeded);
+        if (pTIL) {
+            if (GetTokenInformation(tokenHandle, TokenIntegrityLevel, pTIL, dwLengthNeeded, &dwLengthNeeded)) {
+                DWORD subAuthorityCount = *GetSidSubAuthorityCount(pTIL->Label.Sid);
+                integrityLevel = *GetSidSubAuthority(pTIL->Label.Sid, subAuthorityCount - 1);
+            }
+            LocalFree(pTIL);
+        }
+    }
+    return integrityLevel;
+}
+
+void CheckApplicationPrivileges() {
+    HWND hwndFlightSim = FindWindow(target_window.c_str(), NULL);
+    if (!hwndFlightSim) {
+        has_permission = false;
+        is_flightsimulator_running = false;
+        return;
+    }
+    else {
+        is_flightsimulator_running = true; // Flight Simulator is running
+    }
+
+    DWORD targetProcessId;
+    GetWindowThreadProcessId(hwndFlightSim, &targetProcessId);
+
+    HANDLE targetProcessHandle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, targetProcessId);
+    if (!targetProcessHandle) {
+        has_permission = false;
+        // Keep is_flightsimulator_running as true since the window was found
+        return;
+    }
+
+    HANDLE targetTokenHandle;
+    if (!OpenProcessToken(targetProcessHandle, TOKEN_QUERY, &targetTokenHandle)) {
+        CloseHandle(targetProcessHandle);
+        has_permission = false;
+        // Keep is_flightsimulator_running as true since the window was found
+        return;
+    }
+
+    DWORD targetIntegrityLevel = GetProcessIntegrityLevel(targetTokenHandle);
+    CloseHandle(targetTokenHandle);
+    CloseHandle(targetProcessHandle);
+
+    HANDLE currentProcessHandle = GetCurrentProcess();
+    HANDLE currentTokenHandle;
+    if (!OpenProcessToken(currentProcessHandle, TOKEN_QUERY, &currentTokenHandle)) {
+        has_permission = false;
+        // Keep is_flightsimulator_running as true since the window was found
+        return;
+    }
+
+    DWORD currentIntegrityLevel = GetProcessIntegrityLevel(currentTokenHandle);
+    CloseHandle(currentTokenHandle);
+
+    has_permission = currentIntegrityLevel >= targetIntegrityLevel;
+}
+
+void MinimizeToTray(HWND hWnd) {
+    nid.cbSize = sizeof(NOTIFYICONDATA);
+    nid.hWnd = hWnd;
+    nid.uID = 1;
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    nid.uCallbackMessage = WM_TRAYICON;
+    nid.hIcon = LoadIcon(g_hInst_client, MAKEINTRESOURCE(IDI_SENDFSKEY));
+    std::wstring FileDescription = GetSimpleVersionInfo(L"FileDescription");
+    wcscpy_s(nid.szTip, _countof(nid.szTip), FileDescription.c_str());
+    Shell_NotifyIcon(NIM_ADD, &nid);
+}
+
+void RestoreFromTray(HWND hWnd) {
+    ShowWindow(hWnd, SW_SHOW);
+    Shell_NotifyIcon(NIM_DELETE, &nid);
 }

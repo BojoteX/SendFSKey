@@ -11,7 +11,6 @@
 #define IDM_ABOUT                       105
 #define IDM_EXIT                        106
 #define IDI_SENDFSKEY                   107
-#define IDI_SMALL                       108
 #define IDC_SENDFSKEY_SERVER            109
 #define IDR_MAINFRAME                   128
 #define IDD_DIALOG1                     130
@@ -22,6 +21,11 @@
 #define IDC_IPADDRESS                   1003
 #define IDC_OK                          1004
 #define IDC_IPADDRTEXT                  1007
+#define IDC_APPNAME                     1008
+#define IDC_APPVERSION                  1009
+#define IDC_COMPANYNAME                 1010
+#define IDC_IPADDRESSTEXT               1011
+#define IDC_SERVERMODE_TEXT             1012
 #define ID_SETTINGS_RESET               32771
 #define ID_SETTINGS_CONSOLE             32772
 #define IDM_RESET_SETTINGS              32773
@@ -38,6 +42,8 @@
 #define IDC_MAIN_DISPLAY_TEXT           32785
 #define IDC_STATIC_SERVER               32786
 #define IDC_STATIC_SERVER_TEXT          32787
+#define IDC_VERSION_TEXT                32788
+#define IDC_APPCOPYRIGHT                32788
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -47,7 +53,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        136
 #define _APS_NEXT_COMMAND_VALUE         32784
-#define _APS_NEXT_CONTROL_VALUE         1008
+#define _APS_NEXT_CONTROL_VALUE         1013
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
