@@ -16,6 +16,9 @@ NOTIFYICONDATA nid = {}; // Zero-initialize the structure
 // Debug mode (.ini file will override this)
 bool DEBUG = FALSE;
 
+// This allows us to restart the application wuthout having to close the current instance
+HANDLE mutexHandle = NULL; // Initialization to ensure it starts as NULL
+
 // .ini Settings defaults
 int port = 8028; // Default port can be changed in the INI file
 std::wstring mode = L"Server";
@@ -23,11 +26,12 @@ std::wstring serverIPconf = L"0.0.0.0";
 std::wstring target_window = L"AceApp";
 std::wstring app_process = L"FlightSimulator.exe";
 std::wstring use_queuing = L"No";
+std::wstring consoleVisibility = L"No";
+std::wstring start_minimized = L"No";
 
 // .ini file settings definitions only
 bool queueKeys;
 int maxQueueSize; // Maximum number of keys to queue, its hardcoded to 4 for now
-std::wstring consoleVisibility;
 
 // Global variable to check if the application has permission to send keys and check if the process is running
 bool has_permission = false;
@@ -81,21 +85,27 @@ void WriteSettingsToIniFile(const std::wstring& mode, const std::wstring& ip) {
     }
 
     // Default options
-    if (!WritePrivateProfileStringW(L"Settings", L"TargetWindow", target_window.c_str(), iniPath.c_str())) {
-        DWORD error = GetLastError();
-    }
-    if (!WritePrivateProfileStringW(L"Settings", L"AppProcess", app_process.c_str(), iniPath.c_str())) {
-        DWORD error = GetLastError();
-    }
-    if (!WritePrivateProfileStringW(L"Settings", L"UseQueing", use_queuing.c_str(), iniPath.c_str())) {
-        DWORD error = GetLastError();
-    }
-    if (!WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str())) {
-        DWORD error = GetLastError();
-    }
-    if (!WritePrivateProfileStringW(L"Settings", L"Debug", std::to_wstring(DEBUG).c_str(), iniPath.c_str())) {
-        DWORD error = GetLastError();
-    }
+    if (!WritePrivateProfileStringW(L"Settings", L"TargetWindow", target_window.c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"AppProcess", app_process.c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"UseQueing", use_queuing.c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"Port", std::to_wstring(port).c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"Debug", std::to_wstring(DEBUG).c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"ConsoleVisibility", consoleVisibility.c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
+    if (!WritePrivateProfileStringW(L"Settings", L"StartMinimized", start_minimized.c_str(), iniPath.c_str()))
+    DWORD error = GetLastError();
+
 }
 
 void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
@@ -165,22 +175,7 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
     sendKeyPress(keyCodeNum, isKeyDown);
 }
 
-void MonitorFlightSimulatorProcess() {
-    // Flight Simulator is running, start monitoring
-    std::thread([]() {
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (!is_flightsimulator_running) {
-                // Flight Simulator is not running; initiate shutdown procedure
-                MessageBoxA(NULL, "Flight Simulator is NOT running, will now exit.", "Error", MB_ICONERROR);
-                break;
-            }
-        }
-        // Exit application
-        shutdownServer();
-        ExitProcess(1); // Terminate application if unable to reconnect after max attempts
-    }).detach(); // Detach the thread to allow it to run independently
-}
+
 
 void ToggleConsoleVisibility(const std::wstring& title) {
     HWND consoleWindow = GetConsoleWindow();
@@ -212,7 +207,30 @@ void ToggleConsoleVisibility(const std::wstring& title) {
     }
 }
 
+// Assume mutexHandle is a global variable or accessible where needed
+extern HANDLE mutexHandle; // The handle for the mutex created in WinMain
+
 void RestartApplication() {
+    // Ensure all cleanup is done before restarting, including releasing the mutex
+    if (mutexHandle != NULL) {
+        ReleaseMutex(mutexHandle);
+        CloseHandle(mutexHandle);
+        mutexHandle = NULL; // Ensure the handle is marked as released.
+
+        // Cleanup operations
+        if (isClientMode) {
+            closeClientConnection(); // For client
+            wprintf(L"Closing client connection\n");
+        }
+        else {
+            // For server mode
+            wprintf(L"Closing server connection\n");
+            cleanupServer();
+        }
+        wprintf(L"Winsock cleanup and exiting program\n");
+        cleanupWinsock();
+    }
+
     wchar_t szPath[MAX_PATH];
     if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath)) != 0) {
         // Launch the application again
@@ -225,28 +243,16 @@ void RestartApplication() {
         if (!ShellExecuteEx(&sei)) {
             DWORD error = GetLastError();
             MessageBox(NULL, L"Failed to restart the application.", L"Error", MB_ICONERROR | MB_OK);
-            printf("Failed to restart the application\n");
+            // Re-acquire the mutex for the current (failing) instance since restart didn't happen
+            mutexHandle = CreateMutex(NULL, FALSE, L"Global\\MyUniqueAppNameMutex");
             return;
         }
 
-        if (isClientMode) {
-            closeClientConnection(); // For client
-            wprintf(L"Closing client connection\n");
-        }
-        else {
-            // For server mode, insert cleanup operations here
-            wprintf(L"Closing server connection\n");
-            cleanupServer();
-        }
-        wprintf(L"Winsock cleanup and exiting program\n");
-        cleanupWinsock();
-
-        // Exit the current instance of the application gracefully after cleanup
+        // Exit the current instance of the application gracefully
         exit(0);
     }
     else {
         MessageBox(NULL, L"Failed to obtain application path.", L"Error", MB_ICONERROR | MB_OK);
-        wprintf(L"Failed to obtain application path\n");
     }
 }
 
@@ -421,15 +427,169 @@ void MinimizeToTray(HWND hWnd) {
     nid.cbSize = sizeof(NOTIFYICONDATA);
     nid.hWnd = hWnd;
     nid.uID = 1;
-    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_INFO;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIcon(g_hInst_client, MAKEINTRESOURCE(IDI_SENDFSKEY));
+
+    // Load the tray icon
+    nid.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY));
+    if (!nid.hIcon) {
+        MessageBox(NULL, L"Failed to load icon", L"Error", MB_ICONERROR);
+    }
+
+    // Load the balloon notification icon
+#pragma warning(push)
+#pragma warning(disable : 4302)
+    nid.hBalloonIcon = (HICON)LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR);
+#pragma warning(pop)
+    if (!nid.hBalloonIcon) {
+        MessageBox(NULL, L"Failed to load balloon icon", L"Error", MB_ICONERROR);
+    }
+
+    // Set the tooltip text to the file description
     std::wstring FileDescription = GetSimpleVersionInfo(L"FileDescription");
-    wcscpy_s(nid.szTip, _countof(nid.szTip), FileDescription.c_str());
+    wcsncpy_s(nid.szTip, _countof(nid.szTip), FileDescription.c_str(), _countof(nid.szTip) - 1);
+
+    // Set up balloon notification text
+    nid.dwInfoFlags = NIIF_USER; // Use the user-defined icon for the balloon
+    wcscpy_s(nid.szInfo, _countof(nid.szInfo), L"Application minimized to tray.");
+    wcscpy_s(nid.szInfoTitle, _countof(nid.szInfoTitle), L"SendFSKey");
+
+    // Add the icon to the system tray
     Shell_NotifyIcon(NIM_ADD, &nid);
 }
 
 void RestoreFromTray(HWND hWnd) {
     ShowWindow(hWnd, SW_SHOW);
     Shell_NotifyIcon(NIM_DELETE, &nid);
+}
+
+void ShowContextMenu(HWND hWnd, POINT curPoint)
+{
+    // Create a menu or load it from resources
+    HMENU hPopupMenu = CreatePopupMenu();
+    if (!hPopupMenu) return;
+
+    // Append menu items
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_OPEN, L"Open");
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_CONSOLE, L"Toggle Console");
+
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Shutdown");
+
+    // Add more items here
+
+    // Set the default menu item (optional)
+    SetMenuDefaultItem(hPopupMenu, ID_TRAY_OPEN, FALSE);
+
+    // Display the menu
+    TrackPopupMenu(hPopupMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, curPoint.x, curPoint.y, 0, hWnd, NULL);
+
+    // Clean up
+    DestroyMenu(hPopupMenu);
+}
+
+HANDLE GetParentProcessHandle(DWORD& outParentPID) {
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        return NULL;
+    }
+
+    PROCESSENTRY32 pe32 = { 0 };
+    pe32.dwSize = sizeof(PROCESSENTRY32);
+    DWORD currentPID = GetCurrentProcessId();
+    HANDLE hParent = NULL;
+    outParentPID = 0;
+
+    if (Process32First(hSnapshot, &pe32)) {
+        do {
+            if (pe32.th32ProcessID == currentPID) {
+                outParentPID = pe32.th32ParentProcessID;
+                // Open a handle with necessary permissions
+                hParent = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe32.th32ParentProcessID);
+                break;
+            }
+        } while (Process32Next(hSnapshot, &pe32));
+    }
+    CloseHandle(hSnapshot);
+    return hParent;
+}
+
+void MonitorParentProcessAsync(DWORD parentPID) {
+    std::thread([parentPID]() {
+        HANDLE hParent = OpenProcess(SYNCHRONIZE, FALSE, parentPID);
+        if (hParent == NULL) {
+            wprintf(L"Failed to open parent process for monitoring.\n");
+            return;
+        }
+
+        WaitForSingleObject(hParent, INFINITE);
+        wprintf(L"Will now close the parent.\n");
+
+        CloseHandle(hParent);
+
+        cleanupServer();
+        exit(0);    
+
+        // PostQuitMessage(0); // Example of signaling the main thread to quit
+
+        // The above line will signal the main thread to quit the message loop so all the code after the loop will be executed and cleanup can be done
+
+    }).detach(); // Detach the thread since we won't be joining it
+}
+
+std::wstring GetProcessName(HANDLE hProcess) {
+    std::vector<wchar_t> processName(MAX_PATH);
+    DWORD size = static_cast<DWORD>(processName.size());
+    if (QueryFullProcessImageNameW(hProcess, 0, processName.data(), &size)) {
+        std::wstring fullPath(processName.begin(), processName.begin() + size);
+        size_t lastBackslashIndex = fullPath.find_last_of(L'\\');
+        if (lastBackslashIndex != std::wstring::npos) {
+            return fullPath.substr(lastBackslashIndex + 1);
+        }
+        return fullPath;
+    }
+    return L"Unknown";
+}
+
+void monitorParentProcess() {
+    // Initialize the parent PID variable
+    DWORD parentPID = 0;
+
+    // Get the parent process handle and simultaneously retrieve the parent PID
+    HANDLE hParent = GetParentProcessHandle(parentPID);
+    std::wstring parentProcessName = GetProcessName(hParent);
+
+    // Check if we got a valid handle and parent PID
+    if (hParent && hParent != INVALID_HANDLE_VALUE && parentPID != 0) {
+        // Close the handle as it's no longer needed; we just needed the PID for monitoring
+        CloseHandle(hParent);
+
+        if (parentProcessName.find(app_process) != std::wstring::npos) {
+            // Monitor the parent process
+            MonitorParentProcessAsync(parentPID);
+            wprintf(L"Parent process is %s. Monitoring process.\n", app_process.c_str());
+        }
+        else {
+            wprintf(L"Parent process is NOT %s.\n", app_process.c_str());
+        }
+    }
+    else {
+        // Handle the error or case when there is no parent process to monitor
+        wprintf(L"No parent process detected.\n");
+    }
+}
+
+bool isAlreadyRunning() {
+	// Check if the application is already running
+	HANDLE hMutex = CreateMutex(NULL, TRUE, L"SendFSKeyMutex");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+		CloseHandle(hMutex);
+        return true;
+	}
+	return false;
+}
+
+void UpdateMenuCheckMarks(HWND hwnd) {
+    HMENU hMenu = GetMenu(hwnd); // Assuming hWnd is your main window's handle
+    UINT checkState = (start_minimized == L"Yes") ? MF_CHECKED : MF_UNCHECKED;
+    CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | checkState);
 }

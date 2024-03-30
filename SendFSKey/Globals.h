@@ -25,6 +25,7 @@ extern std::wstring serverIP;
 extern bool queueKeys;
 extern int maxQueueSize;
 extern NOTIFYICONDATA nid;
+extern HANDLE mutexHandle; // The handle for the mutex created in WinMain
 
 // .ini file settings
 extern std::wstring mode;
@@ -32,12 +33,11 @@ extern std::wstring serverIPconf;
 extern std::wstring use_queuing;
 extern std::wstring target_window;
 extern std::wstring app_process;
+extern std::wstring consoleVisibility;
+extern std::wstring start_minimized;
 extern int port;
 
-
 // To use from anywhere
-void MonitorFlightSimulatorProcess();
-bool isFlightSimulatorRunning();
 std::wstring getServerIPAddress();
 std::wstring FormatForDisplay(const std::string& data);
 

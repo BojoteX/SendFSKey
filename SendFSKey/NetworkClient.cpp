@@ -169,6 +169,13 @@ void closeClientConnection() {
 }
 
 void sendKeyPress(UINT keyCode, bool isKeyDown) {
+
+    // If we're reconnecting and not queueing, ignore the input
+    if (isReconnecting and !queueKeys) {
+        // printf("INPUT IGNORED WHILE WE RECONNECT: %u\n", keyCode);
+        return;
+    }
+
     std::wstring sent_message = L"Virtual-Key Code sent: (" + std::to_wstring(keyCode) + L")";
 
     unsigned char buffer[5];

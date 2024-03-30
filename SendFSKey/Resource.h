@@ -41,9 +41,14 @@
 #define IDC_MAIN_DISPLAY                32784
 #define IDC_MAIN_DISPLAY_TEXT           32785
 #define IDC_STATIC_SERVER               32786
+#define ID_SETTINGS_MINIMIZEONSTART     32786
 #define IDC_STATIC_SERVER_TEXT          32787
 #define IDC_VERSION_TEXT                32788
-#define IDC_APPCOPYRIGHT                32788
+#define IDC_APPCOPYRIGHT                32789
+#define ID_TRAY_EXIT                    32790
+#define ID_TRAY_OPEN                    32791
+#define ID_TRAY_CONSOLE                 32792
+#define ID_OPTIONS_MINIMIZEONSTART      32793
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -52,7 +57,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        136
-#define _APS_NEXT_COMMAND_VALUE         32784
+#define _APS_NEXT_COMMAND_VALUE         32787
 #define _APS_NEXT_CONTROL_VALUE         1013
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

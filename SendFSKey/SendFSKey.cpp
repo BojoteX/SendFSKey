@@ -1,4 +1,5 @@
 #include <Windows.h>
+#include <strsafe.h>
 #include <string>
 #include <thread>
 #include <sstream>
@@ -58,6 +59,11 @@ std::wstring productVersion = GetSimpleVersionInfo(L"ProductVersion");
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
+    if (isAlreadyRunning()) {
+		MessageBox(NULL, L"SendFSKey is already running. Please close the existing instance before starting a new one.", L"Error", MB_ICONERROR);
+		return -1;
+	}
+
     // Check if the INI file exists
     if (!IniFileExists("SendFSKey.ini")) {
         // INI file doesn't exist, prompt user for mode
@@ -101,7 +107,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             // Server-specific initializations
         }
         else {
-            MessageBox(NULL, L"Selected mode has not been implemented.", L"Error", MB_ICONERROR | MB_OK);
+            MessageBox(NULL, L"Selected mode has not been implemented. Will quit now", L"Error", MB_ICONERROR | MB_OK);
+            // Also, delete the init file as we have no idea what the user has entered
+            DeleteIniFileAndRestart();
         }
     }
 
@@ -137,9 +145,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     // Adjust the buffer size to 2 to accommodate one character plus a null terminator
     wchar_t DEBUGBuffer[2]; // Enough for "0" or "1" plus a null terminator
     GetPrivateProfileStringW(L"Settings", L"Debug", L"0", DEBUGBuffer, _countof(DEBUGBuffer), iniPath.c_str());
-
-    // Convert the first character of DEBUGBuffer to a bool
     DEBUG = (DEBUGBuffer[0] == L'1');
+
+    // isMinimized or not?
+    wchar_t start_minimizedBuffer[5]; // Enough for long names
+    GetPrivateProfileStringW(L"Settings", L"StartMinimized", L"No", start_minimizedBuffer, 5, iniPath.c_str());
+    start_minimized = start_minimizedBuffer;
 
     int exitCode = 0; // Default exit code
 
@@ -261,6 +272,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             wprintf(L"Error with the GUI ready event.\n");
         }
 
+        // Right after loading settings or during window initialization
+        HMENU hMenu = GetMenu(hWndClient);
+        if (start_minimized == L"Yes") {
+            ShowWindow(hWndClient, SW_SHOWMINIMIZED);
+            CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_CHECKED);
+        }
+        else {
+            ShowWindow(hWndClient, SW_SHOWNORMAL);
+            CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_UNCHECKED);
+        }
+
         // Se we dont lock the GUI thread, we will start the connection in a separate thread
         clientConnectionThread(); // Start the client connection
 
@@ -296,16 +318,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         // Check if the application has sufficient privileges
         CheckApplicationPrivileges();
 
-        /*
-        if (!is_flightsimulator_running) {
-            MessageBox(NULL, L"Flight Simulator is NOT running, server will shutdown", L"Permission Error", MB_ICONERROR);
-            return -1; // Exit if we don't have permission
-        }
-        */
-
         if (!has_permission) {
             MessageBox(NULL, L"Insufficient privileges to send input to Flight Simulator. Please run this application as an administrator or add the application to your Flight Simulator exe.xml.", L"Permission Error", MB_ICONERROR);
         }
+
+
 
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey - Server";
@@ -410,11 +427,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             wprintf(L"Error with the GUI ready event.\n");
         }
          
+        // After loading settings and updating UI checkmarks
+        if (start_minimized == L"Yes") {
+            MinimizeToTray(hWndServer);
+            ShowWindow(hWndServer, SW_HIDE); // Hide the window
+        }
+
+        UpdateMenuCheckMarks(hWndServer); // Update the menu checkmarks
+
         // Start the server in a separate thread to avoid blocking the main thread
         serverStartThread(); // Start the server in a separate thread
 
         // This is the server window loop
         if (DEBUG) wprintf(L"GUI WindowProcess loop starting. We can now send messages to the server GUI.\n");
+
+        // This will pause (in a separate thread) until the parent process exits, 
+        // then will resume but since we did PostQuitMessage(0) inside the thread the line below that enters the message 
+        // loop will exit immediately and the application will close after cleaning up.
+        monitorParentProcess(); // Monitor the parent process
 
         while (GetMessage(&msg_server, nullptr, 0, 0)) {
             TranslateMessage(&msg_server);
@@ -565,6 +595,31 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
+        case ID_OPTIONS_MINIMIZEONSTART: {
+
+
+            if (start_minimized == L"Yes") {
+                start_minimized = L"No";
+            }
+            else {
+                start_minimized = L"Yes";
+            }
+
+            // Write the setting to the INI file
+            std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini";
+            WritePrivateProfileStringW(L"Settings", L"StartMinimized", start_minimized.c_str(), iniPath.c_str());
+
+            // Update the menu checkmark
+            HMENU hMenu = GetMenu(hWnd);
+            UINT state = GetMenuState(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND);
+            if (state & MF_CHECKED) {
+                CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_UNCHECKED);
+            }
+            else {
+                CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_CHECKED);
+            }
+            break;
+		}
         case IDM_ABOUT:
             DialogBox(g_hInst_client, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
@@ -647,21 +702,72 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
 
     case WM_SIZE:
-        if (wp == SIZE_MINIMIZED) {
+        if (wp == SIZE_MINIMIZED && start_minimized == L"Yes") {
             MinimizeToTray(hWnd);
             ShowWindow(hWnd, SW_HIDE); // Hide the window
         }
         break;
     case WM_TRAYICON: {
-        if (lp == WM_LBUTTONDOWN) { // Restore on left-click
-            RestoreFromTray(hWnd);
+
+		if (lp == WM_LBUTTONDBLCLK) {
+			ShowWindow(hWnd, SW_RESTORE);
+			// Bring the window to the foreground
+			SetForegroundWindow(hWnd);
+			return TRUE;
+		}
+        else if (LOWORD(lp) == WM_RBUTTONDOWN) {
+            POINT curPoint;
+            GetCursorPos(&curPoint);
+            SetForegroundWindow(hWnd);
+
+            // Display the context menu
+            // This function is described in Step 2
+            ShowContextMenu(hWnd, curPoint);
+
+            return TRUE;
         }
         break;
     }
-
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
+        case ID_OPTIONS_MINIMIZEONSTART: {
+
+            if (start_minimized == L"Yes") {
+                start_minimized = L"No";
+            }
+            else {
+                start_minimized = L"Yes";
+            }
+
+            // Write the setting to the INI file
+            std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini";
+            WritePrivateProfileStringW(L"Settings", L"StartMinimized", start_minimized.c_str(), iniPath.c_str());
+
+            // Update the menu checkmark
+            HMENU hMenu = GetMenu(hWnd);
+            UINT state = GetMenuState(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND);
+            if (state & MF_CHECKED) {
+                CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_UNCHECKED);
+            }
+            else {
+                CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | MF_CHECKED);
+            }
+            break;
+        }
+
+        case ID_TRAY_EXIT:
+            // Perform the action for the "Exit" menu item
+            DestroyWindow(hWnd);
+            break;
+        case ID_TRAY_OPEN:
+            ShowWindow(hWnd, SW_RESTORE);
+            // Bring the window to the foreground
+            SetForegroundWindow(hWnd);
+            break;
+        case ID_TRAY_CONSOLE:
+            ToggleConsoleVisibility(L"SendFSKey Server Console");
+            break;
         case IDM_ABOUT:
             DialogBox(g_hInst_server, MAKEINTRESOURCE(IDM_ABOUT_BOX), hWnd, AboutDlgProc);
             break;
