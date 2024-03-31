@@ -5,7 +5,10 @@
 #include <TlHelp32.h>
 #include <unordered_map>
 #include <shellapi.h>
+#include <Richedit.h>
+#include <codecvt>
 #include "Globals.h"
+
 
 // Tell the linker to include the Version library
 #pragma comment(lib, "Version.lib")
@@ -592,4 +595,83 @@ void UpdateMenuCheckMarks(HWND hwnd) {
     HMENU hMenu = GetMenu(hwnd); // Assuming hWnd is your main window's handle
     UINT checkState = (start_minimized == L"Yes") ? MF_CHECKED : MF_UNCHECKED;
     CheckMenuItem(hMenu, ID_OPTIONS_MINIMIZEONSTART, MF_BYCOMMAND | checkState);
+}
+
+std::wstring MarkdownToRtf(const std::string& markdown) {
+    std::wstring rtfHeader = L"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\n";
+    std::wstring rtfFooter = L"}";
+    std::wstring rtfContent;
+
+    // Simple Markdown to RTF conversion for headers and emphasis
+    std::istringstream iss(markdown);
+    std::string line;
+    while (std::getline(iss, line)) {
+        if (line.substr(0, 2) == "# ") { // Header 1
+            rtfContent += L"\\fs48 \\b " + std::wstring(line.begin() + 2, line.end()) + L"\\b0\\par\n";
+        }
+        else if (line.substr(0, 3) == "## ") { // Header 2
+            rtfContent += L"\\fs36 \\b " + std::wstring(line.begin() + 3, line.end()) + L"\\b0\\par\n";
+        }
+        else { // Regular text
+            rtfContent += std::wstring(line.begin(), line.end()) + L"\\par\n";
+        }
+    }
+
+    return rtfHeader + rtfContent + rtfFooter;
+}
+
+std::string Utf16ToUtf8(const std::wstring& utf16Str)
+{
+    if (utf16Str.empty()) return std::string();
+
+    // Determine the size of the buffer needed
+    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, utf16Str.c_str(), (int)utf16Str.size(), NULL, 0, NULL, NULL);
+    if (sizeNeeded <= 0) return std::string();
+
+    std::string utf8Str(sizeNeeded, 0);
+    // Perform the actual conversion
+    int convertedLength = WideCharToMultiByte(CP_UTF8, 0, utf16Str.c_str(), (int)utf16Str.size(), &utf8Str[0], sizeNeeded, NULL, NULL);
+
+    if (convertedLength != sizeNeeded) return std::string(); // Conversion failed
+
+    return utf8Str;
+}
+
+void LoadTextFromResourceToEditControl(HWND hDlg, UINT nIDDlgItem) {
+
+    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(IDR_TEXT1), RT_RCDATA);
+    if (!hRes) {
+        MessageBox(hDlg, L"Resource not found.", L"Error", MB_OK);
+        return;
+    }
+    HGLOBAL hData = LoadResource(NULL, hRes);
+    if (!hData) {
+        MessageBox(hDlg, L"Failed to load resource.", L"Error", MB_OK);
+        return;
+    }
+
+    // Resource loading code remains the same...
+    LPCSTR lpData = static_cast<LPCSTR>(LockResource(hData));
+    DWORD dwSize = SizeofResource(NULL, hRes);
+
+    // Assuming the resource data is UTF-8 encoded Markdown text
+    std::string markdownText(lpData, dwSize);
+
+    // Convert Markdown to RTF
+    std::wstring rtfContent = MarkdownToRtf(markdownText);
+
+    // Example of a UTF-8 encoded RTF string (ensure the actual string is UTF-8 encoded)
+    const char* utf8RtfTest = "{\\rtf1\\ansi This is a \\b bold\\b0 test.}";
+
+    // Convert std::wstring (rtfContent) to a UTF-8 encoded std::string
+    // std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    // std::string utf8RtfContent = converter.to_bytes(rtfContent);
+
+    std::string utf8RtfContent = Utf16ToUtf8(rtfContent); // New
+
+    HWND hRichEdit = GetDlgItem(hDlg, nIDDlgItem);
+
+    // Prepare the Rich Edit control to accept UTF-8 encoded RTF content
+    SETTEXTEX st = { ST_DEFAULT, CP_UTF8 };
+    SendMessage(hRichEdit, EM_SETTEXTEX, (WPARAM)&st, (LPARAM)utf8RtfContent.c_str());
 }

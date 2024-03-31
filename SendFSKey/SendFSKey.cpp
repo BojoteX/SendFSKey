@@ -10,11 +10,18 @@
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 
+// Declare a brush for the static control background globally or at a suitable scope
+HBRUSH hStaticBkBrush = CreateSolidBrush(RGB(240, 240, 240)); // Light grey background
+
+
 // Function prototypes
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+// Global variables for the README.md dialog
+// HWND hDlg = NULL; // Handle to the dialog box
 
 // Global variables
 HINSTANCE g_hInst = NULL;  // Definition
@@ -29,9 +36,13 @@ HWND hStaticServer = NULL; // Handle to your server edit control
 HWND hStaticClient = NULL; // Handle to your client edit control
 
 // Default values for the client and server Windows
-int DEFAULT_WIDTH = 760;
-int DEFAULT_HEIGHT = 255;
+int PADDING = 10;
+int DEFAULT_WIDTH = 570;
+int DEFAULT_HEIGHT = 180;
+int STATIC_DEFAULT_WIDTH = DEFAULT_WIDTH - (PADDING * 4);
+int STATIC_DEFAULT_HEIGHT = DEFAULT_HEIGHT - (PADDING * 8);
 int FONT_SIZE = 18;
+std::wstring FONT_TYPE = L"Segoe UI Variable"; // was Segoe UI Variable
 
 // Message loop for client and server
 MSG msg_client = { 0 };
@@ -58,6 +69,9 @@ std::wstring legalCopyright = GetSimpleVersionInfo(L"LegalCopyright");
 std::wstring productVersion = GetSimpleVersionInfo(L"ProductVersion");
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
+
+    // Rich text library
+    LoadLibrary(TEXT("Msftedit.dll"));
 
     if (isAlreadyRunning()) {
 		MessageBox(NULL, L"SendFSKey is already running. Please close the existing instance before starting a new one.", L"Error", MB_ICONERROR);
@@ -186,14 +200,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Client Window
         HWND hWndClient = CreateWindowEx(
-            WS_EX_APPWINDOW,                    // No extended window styles.
+            WS_EX_OVERLAPPEDWINDOW,             // Client edge for a sunken border.
             className,                          // Pointer to registered class name.
             windowName,                         // Pointer to window name.
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,   // Window style.
             CW_USEDEFAULT,                      // Use the system's default horizontal position.
             CW_USEDEFAULT,                      // Use the system's default vertical position.
-            800,                                // Use the system's default width.
-            600,                                // Use the system's default height.
+            DEFAULT_WIDTH,                      // Use the system's default width.
+            DEFAULT_HEIGHT,                     // Use the system's default height.
             nullptr,                            // No parent window.
             nullptr,                            // Use the class menu.
             hInstance,                          // Handle to application instance.
@@ -208,14 +222,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Create a static control for displaying text (replaces the edit control).
         hStaticClient = CreateWindowEx(
-            0,                                  // No extended window styles.
+            WS_EX_WINDOWEDGE,                   // No extended window styles.
             L"STATIC",                          // STATIC control class.
             L"",                                // Initial text - this will be changed dynamically.
             WS_CHILD | WS_VISIBLE | SS_LEFT,    // Static control styles.
-            8,                                  // x-coordinate of the upper-left corner.
-            8,                                  // y-coordinate of the upper-left corner.
-            400,                                // Width; adjusted for padding.
-            300,                                // Height; enough for one line of text, adjust as needed.
+            PADDING,                            // x-coordinate of the upper-left corner.
+            PADDING,                            // y-coordinate of the upper-left corner.
+            STATIC_DEFAULT_WIDTH,               // Width; adjusted for padding.
+            STATIC_DEFAULT_HEIGHT,              // Height; adjusted for padding.
             hWndClient,                         // Handle to the parent window.
             (HMENU)IDC_MAIN_DISPLAY_TEXT,       // Control ID, ensure it's unique and doesn't conflict with existing IDs.
             hInstance,                          // Handle to application instance.
@@ -228,22 +242,21 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             return -1; // Handle static control creation failure.
         }
 
-        // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            18,                                 // Font height.
-            0,                                  // Average character width.
-            0,                                  // Angle of escapement.
-            0,                                  // Base-line orientation angle.
-            FW_NORMAL,                          // Font weight.
-            FALSE,                              // Italic attribute option.
-            FALSE,                              // Underline attribute option.
-            FALSE,                              // Strikeout attribute option.
-            DEFAULT_CHARSET,                    // Character set identifier.
-            OUT_DEFAULT_PRECIS,                 // Output precision.
-            CLIP_DEFAULT_PRECIS,                // Clipping precision.
-            CLEARTYPE_QUALITY,                  // Output quality.
-            VARIABLE_PITCH | FF_SWISS,          // Pitch and family.
-            L"Segoe UI"                         // Font typeface name.
+            FONT_SIZE,                           // Increased font height for better readability.
+            0,                                   // Average character width.
+            0,                                   // Angle of escapement.
+            0,                                   // Base-line orientation angle.
+            FW_NORMAL,                           // Font weight.
+            FALSE,                               // Italic attribute option.
+            FALSE,                               // Underline attribute option.
+            FALSE,                               // Strikeout attribute option.
+            DEFAULT_CHARSET,                     // Character set identifier.
+            OUT_DEFAULT_PRECIS,                  // Output precision.
+            CLIP_DEFAULT_PRECIS,                 // Clipping precision.
+            CLEARTYPE_QUALITY,                   // Output quality.
+            VARIABLE_PITCH | FF_SWISS,           // Pitch and family.
+            FONT_TYPE.c_str()                    // Try the new "Segoe UI Variable" font.
         );
 
         // Check if the Main Client Window was created successfully.
@@ -341,18 +354,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Main Server Window
         HWND hWndServer = CreateWindowEx(
-            WS_EX_APPWINDOW,                        // Extended window styles.
-            className,                              // Pointer to registered class name.
-            windowName,                             // Pointer to window name.
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,       // Window style.
-            CW_USEDEFAULT,                          // Use the system's default horizontal position.
-            CW_USEDEFAULT,                          // Use the system's default vertical position.
-            800,                                    // Use the system's default width.
-            600,                                    // Use the system's default height.
-            NULL,                                   // No parent window.
-            NULL,                                   // No menu.
-            hInstance,                              // Handle to application instance.
-            NULL                                    // No additional window data.
+            WS_EX_OVERLAPPEDWINDOW,             // Client edge for a sunken border.
+            className,                          // Pointer to registered class name.
+            windowName,                         // Pointer to window name.
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,   // Window style.
+            CW_USEDEFAULT,                      // Use the system's default horizontal position.
+            CW_USEDEFAULT,                      // Use the system's default vertical position.
+            DEFAULT_WIDTH,                      // Use the system's default width.
+            DEFAULT_HEIGHT,                     // Use the system's default height.
+            nullptr,                            // No parent window.
+            nullptr,                            // Use the class menu.
+            hInstance,                          // Handle to application instance.
+            nullptr                             // No additional window data.
         );
 
         // Check if the Main Server Window was created successfully.
@@ -363,18 +376,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Create a static control for the server window to display messages.
         hStaticServer = CreateWindowEx(
-            0,                                      // No extended window styles.
-            L"STATIC",                              // STATIC control class for display.
-            L"",                                    // Initial text - can be updated dynamically.
-            WS_CHILD | WS_VISIBLE | SS_LEFT,        // Static control styles for text display.
-            8,                                      // x-coordinate of the upper-left corner.
-            8,                                      // y-coordinate of the upper-left corner.
-            400,                                    // Width of the control; adjusted for padding.
-            300,                                    // Height of the control; enough for one line of text, adjust as needed.
-            hWndServer,                             // Handle to the parent window.
-            (HMENU)IDC_STATIC_SERVER_TEXT,          // Control ID, use a unique identifier.
-            hInstance,                              // Handle to the instance.
-            NULL                                    // No additional window data.
+            WS_EX_WINDOWEDGE,                   // No extended window styles.
+            L"STATIC",                          // STATIC control class.
+            L"",                                // Initial text - this will be changed dynamically.
+            WS_CHILD | WS_VISIBLE | SS_LEFT,    // Static control styles.
+            PADDING,                            // x-coordinate of the upper-left corner.
+            PADDING,                            // y-coordinate of the upper-left corner.
+            STATIC_DEFAULT_WIDTH,               // Width; adjusted for padding.
+            STATIC_DEFAULT_HEIGHT,              // Height; adjusted for padding.
+            hWndServer,                         // Handle to the parent window.
+            (HMENU)IDC_MAIN_DISPLAY_TEXT,       // Control ID, ensure it's unique and doesn't conflict with existing IDs.
+            hInstance,                          // Handle to application instance.
+            NULL                                // No additional window data.
         );
 
         // Check if the static control was created successfully.
@@ -385,20 +398,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
-            20,                                     // Font height.
-            0,                                      // Average character width.
-            0,                                      // Angle of escapement.
-            0,                                      // Base-line orientation angle.
-            FW_NORMAL,                              // Font weight.
-            FALSE,                                  // Italic attribute option.
-            FALSE,                                  // Underline attribute option.
-            FALSE,                                  // Strikeout attribute option.
-            DEFAULT_CHARSET,                        // Character set identifier.
-            OUT_DEFAULT_PRECIS,                     // Output precision.
-            CLIP_DEFAULT_PRECIS,                    // Clipping precision.
-            CLEARTYPE_QUALITY,                      // Output quality.
-            VARIABLE_PITCH | FF_SWISS,              // Pitch and family.
-            L"Segoe UI"                             // Font typeface name.
+            FONT_SIZE,                           // Increased font height for better readability.
+            0,                                   // Average character width.
+            0,                                   // Angle of escapement.
+            0,                                   // Base-line orientation angle.
+            FW_NORMAL,                           // Font weight.
+            FALSE,                               // Italic attribute option.
+            FALSE,                               // Underline attribute option.
+            FALSE,                               // Strikeout attribute option.
+            DEFAULT_CHARSET,                     // Character set identifier.
+            OUT_DEFAULT_PRECIS,                  // Output precision.
+            CLIP_DEFAULT_PRECIS,                 // Clipping precision.
+            CLEARTYPE_QUALITY,                   // Output quality.
+            VARIABLE_PITCH | FF_SWISS,           // Pitch and family.
+            FONT_TYPE.c_str()                    // Try the new "Segoe UI Variable" font.
         );
 
         // Check if the static control was created successfully.
@@ -468,6 +481,27 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         CloseHandle(guiReadyEvent); // Close the event handle
 
     return exitCode; // Return the exit code
+}
+
+INT_PTR CALLBACK ExperimentoDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG: {
+        LoadTextFromResourceToEditControl(hDlg, IDC_TEXT_DISPLAY);
+        return (INT_PTR)TRUE;
+    }
+    case WM_COMMAND:
+
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            DestroyWindow(hDlg); // Instead of EndDialog
+            // EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+    }
+    return (INT_PTR)FALSE;
 }
 
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -595,9 +629,32 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
+        case IDD_HELP_EXPERIMENTO: {
+
+            HWND hDlg = CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc, 0);
+            if (hDlg != NULL) {
+                ShowWindow(hDlg, SW_SHOW); // Make sure the dialog is shown
+
+            }
+            else {
+                MessageBox(NULL, L"Exiting", L"Exiting", MB_OK);
+            }
+
+            // CreateDialogParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc, 0);
+            // DialogBox(g_hInst, MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc);
+            break;
+
+        }
+
+        case ID_HELP_DISCORD:
+            ShellExecute(NULL, L"open", L"https://discord.gg/3HDGcaP5VH", NULL, NULL, SW_SHOWNORMAL);
+            break;
+        case ID_HELP_GITHUB:
+            ShellExecute(NULL, L"open", L"https://github.com/BojoteX/SendFSKey", NULL, NULL, SW_SHOWNORMAL);
+            break;
+
+
         case ID_OPTIONS_MINIMIZEONSTART: {
-
-
             if (start_minimized == L"Yes") {
                 start_minimized = L"No";
             }
@@ -728,11 +785,43 @@ LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     }
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wp; // Get the device context for the static control
+        SetBkColor(hdcStatic, RGB(240, 240, 240)); // Set the background color
+        SetTextColor(hdcStatic, RGB(0, 0, 0)); // Set the text color, e.g., to black
+
+        return (INT_PTR)hStaticBkBrush; // Return the brush used for the control's background
+    }
     case WM_COMMAND: {
         int wmId = LOWORD(wp); // Move this line inside the WM_COMMAND case
         switch (wmId) {
-        case ID_OPTIONS_MINIMIZEONSTART: {
 
+
+        case IDD_HELP_EXPERIMENTO: {
+
+            HWND hDlg = CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc, 0);
+            if (hDlg != NULL) {
+                ShowWindow(hDlg, SW_SHOW); // Make sure the dialog is shown
+
+            }
+            else {
+                MessageBox(NULL, L"Exiting", L"Exiting", MB_OK);
+            }
+
+            // CreateDialogParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc, 0);
+            // DialogBox(g_hInst, MAKEINTRESOURCE(IDD_EXPERIMENTO), hWnd, ExperimentoDlgProc);
+            break;
+        }
+
+        case ID_HELP_DISCORD:
+            ShellExecute(NULL, L"open", L"https://discord.gg/3HDGcaP5VH", NULL, NULL, SW_SHOWNORMAL);
+            break;
+        case ID_HELP_GITHUB:
+            ShellExecute(NULL, L"open", L"https://github.com/BojoteX/SendFSKey", NULL, NULL, SW_SHOWNORMAL);
+            break;
+
+        case ID_OPTIONS_MINIMIZEONSTART: {
             if (start_minimized == L"Yes") {
                 start_minimized = L"No";
             }

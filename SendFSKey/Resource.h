@@ -15,6 +15,10 @@
 #define IDR_MAINFRAME                   128
 #define IDD_DIALOG1                     130
 #define IDR_CLIENTMENU                  132
+#define IDD_EXPERIMENTO                 133
+#define IDR_RCDATA1                     134
+#define IDR_TEXT1                       142
+#define IDR_RCDATA2                     144
 #define IDC_CANCEL                      1000
 #define IDC_MODE                        1001
 #define IDC_COMBOBOX                    1002
@@ -26,6 +30,8 @@
 #define IDC_COMPANYNAME                 1010
 #define IDC_IPADDRESSTEXT               1011
 #define IDC_SERVERMODE_TEXT             1012
+#define IDC_TEXT_DISPLAY                1013
+#define IDC_RICHEDIT21                  1015
 #define ID_SETTINGS_RESET               32771
 #define ID_SETTINGS_CONSOLE             32772
 #define IDM_RESET_SETTINGS              32773
@@ -41,14 +47,18 @@
 #define IDC_MAIN_DISPLAY                32784
 #define IDC_MAIN_DISPLAY_TEXT           32785
 #define IDC_STATIC_SERVER               32786
-#define ID_SETTINGS_MINIMIZEONSTART     32786
-#define IDC_STATIC_SERVER_TEXT          32787
-#define IDC_VERSION_TEXT                32788
-#define IDC_APPCOPYRIGHT                32789
-#define ID_TRAY_EXIT                    32790
-#define ID_TRAY_OPEN                    32791
-#define ID_TRAY_CONSOLE                 32792
-#define ID_OPTIONS_MINIMIZEONSTART      32793
+#define ID_SETTINGS_MINIMIZEONSTART     32787
+#define IDC_STATIC_SERVER_TEXT          32788
+#define ID_HELP_DISCORD                 32789
+#define IDC_VERSION_TEXT                32790
+#define ID_HELP_GITHUB                  32791
+#define IDC_APPCOPYRIGHT                32792
+#define ID_HELP_README                  32793
+#define ID_TRAY_EXIT                    32794
+#define IDD_HELP_EXPERIMENTO            32795
+#define ID_TRAY_OPEN                    32796
+#define ID_TRAY_CONSOLE                 32797
+#define ID_OPTIONS_MINIMIZEONSTART      32798
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -56,9 +66,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        136
-#define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1013
+#define _APS_NEXT_RESOURCE_VALUE        145
+#define _APS_NEXT_COMMAND_VALUE         32791
+#define _APS_NEXT_CONTROL_VALUE         1016
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

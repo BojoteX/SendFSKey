@@ -1,4 +1,4 @@
-# SendFSKey - Send keypresses to MSFS over a network
+# SendFSKey - Send MSFS Keyboard Input over the network
 
 ## Overview
 SendFSKey is a lightweight application designed for seamless remote keyboard input in Microsoft Flight Simulator (MSFS) from a local network. Its meant to be used by cockpit builders or developers to facilitate sending keyboard commands to the sim over a local network. Existing programs like FSUIPC and Key2Lan have this functionality but its unintuitive and not free.

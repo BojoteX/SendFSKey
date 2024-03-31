@@ -172,9 +172,14 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
 
     // If we're reconnecting and not queueing, ignore the input
     if (isReconnecting and !queueKeys) {
-        // printf("INPUT IGNORED WHILE WE RECONNECT: %u\n", keyCode);
+        printf("\n");
+        printf("*****************************************************************\n");
+        printf("* [ATTENTION] Virtual-Key Code (%u) ignored while re-connecting *\n", keyCode);
+        printf("*****************************************************************\n");
         return;
     }
+
+    // We'll try to reconnect infinitely until we're successful as the reconnection process is handled in a separate thread and barely uses any resources
 
     std::wstring sent_message = L"Virtual-Key Code sent: (" + std::to_wstring(keyCode) + L")";
 
