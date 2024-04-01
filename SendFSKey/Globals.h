@@ -3,7 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
-#include <shellapi.h>
+// #include <shellapi.h>
 #include <commctrl.h>
 
 #pragma comment(lib, "comctl32.lib")
@@ -19,7 +19,6 @@ extern bool DEBUG;
 extern HANDLE guiReadyEvent;
 extern HWND hWndStatusBarClient; 
 extern HWND hWndStatusBarServer;
-
 extern HWND hStaticServer;
 extern HWND hStaticClient;
 extern HINSTANCE g_hInst;

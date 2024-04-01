@@ -2,7 +2,6 @@
 #include <ws2tcpip.h>
 #include "NetworkClient.h"
 
-
 // Define the expected server signature
 const char* EXPECTED_SERVER_SIGNATURE = "SendFSKeySSv1";
 
@@ -180,7 +179,7 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         printf("\n");
         printf("*****************************************************************\n");
         printf("* [ATTENTION] Virtual-Key Code (%u) ignored while re-connecting *\n", keyCode);
-        printf("*****************************************************************\n");
+        printf("*****************************************************************\n\n");
         return;
     }
 
@@ -261,83 +260,6 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         }
 
         std::thread(reconnectAndResend).detach(); // Attempt reconnection in a separate thread
-    }
-    else {
-        // If send was successful, wait for server acknowledgment
-        char ack;
-        if (recv(g_persistentSocket, &ack, sizeof(ack), 0) > 0) { // Blocking call until ack is received
-            if (isKeyDown)
-                SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)sent_message.c_str());
-        }
-    }
-}
-
-// Send key press event to the server with reconnection handling and queueing to avoid data loss
-void sendKeyPressORIGINAL(UINT keyCode, bool isKeyDown) {
-    std::wstring sent_message = L"Virtual-Key Code sent: (" + std::to_wstring(keyCode) + L")";
-
-    unsigned char buffer[5];
-    buffer[0] = isKeyDown ? 'D' : 'U'; // Event type flag
-    memcpy(buffer + 1, &keyCode, sizeof(keyCode)); // Copy keyCode into buffer
-
-    auto reconnectAndResend = []() {
-        std::this_thread::sleep_for(std::chrono::seconds(2)); // Initial pause before attempting to reconnect
-
-        if (!isReconnecting.exchange(true)) {
-            printf("Connection error. Attempting to reconnect...\n");
-            closeClientConnection(); // Close the existing connection
-
-            bool isConnected = false;
-            while (!isConnected) {
-                Sleep(5000); // Wait for 5 seconds before retrying
-
-                isConnected = establishConnection();
-                if (!isConnected) {
-                    printf("Reconnect attempt failed. Waiting 5 seconds before retrying...\n");
-                }
-            }
-
-            printf("Reconnection successful.\n");
-            SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Reconnection successful.");
-            isReconnecting = false; // Reset the reconnection flag
-
-            // Process all queued key events after reconnection
-            std::lock_guard<std::mutex> lock(queueMutex);
-            while (!keyEventQueue.empty()) {
-                auto [key, isDown] = keyEventQueue.front();
-                keyEventQueue.pop();
-
-                // Resend the key press event
-                unsigned char resendBuffer[5];
-                resendBuffer[0] = isDown ? 'D' : 'U'; // Event type flag
-                memcpy(resendBuffer + 1, &key, sizeof(key)); // Copy keyCode into buffer
-
-                if (send(g_persistentSocket, reinterpret_cast<char*>(resendBuffer), sizeof(resendBuffer), 0) != SOCKET_ERROR) {
-                    if(isDown)
-                        printf("[KEY_DOWN] for Virtual-Key Code %u successfully resent.\n", key);
-                    else
-                        printf("[KEY_UP] for Virtual-Key Code %u successfully resent.\n", key);
-                }
-                else {
-                    if (isDown)
-                        printf("[KEY_DOWN] for Virtual-Key Code %u could NOT be sent.\n", key);
-                    else
-                        printf("[KEY_UP] for Virtual-Key Code %u could NOT be sent.\n", key);
-                    // Consider re-queueing the event or handling failure
-                }
-            }
-        }
-    };
-
-    if (send(g_persistentSocket, reinterpret_cast<char*>(buffer), sizeof(buffer), 0) == SOCKET_ERROR) {
-        // Queue the event for future sending
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            keyEventQueue.emplace(keyCode, isKeyDown);
-        }
-
-        // Attempt reconnection in a separate thread without blocking the main thread
-        std::thread(reconnectAndResend).detach(); // Detach the thread to run independently
     }
     else {
         // If send was successful, wait for server acknowledgment

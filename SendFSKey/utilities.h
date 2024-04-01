@@ -4,13 +4,13 @@
 #include <fstream>
 #include <TlHelp32.h>
 #include <unordered_map>
-#include <shellapi.h>
+// #include <shellapi.h>
 #include <Richedit.h>
-#include <codecvt>
-#include "Globals.h"
+// #include <codecvt>
+// #include "Globals.h"
 #include <regex>
-#include <vector>
-#include <iostream>
+// #include <vector>
+// #include <iostream>
 
 // Tell the linker to include the Version library
 #pragma comment(lib, "Version.lib")
@@ -180,8 +180,6 @@ void getKey(UINT keyCodeNum, bool isSystemKey, bool isKeyDown) {
     sendKeyPress(keyCodeNum, isKeyDown);
 }
 
-
-
 void ToggleConsoleVisibility(const std::wstring& title) {
     HWND consoleWindow = GetConsoleWindow();
     std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini";
@@ -211,9 +209,6 @@ void ToggleConsoleVisibility(const std::wstring& title) {
         WritePrivateProfileStringW(L"Settings", L"ConsoleVisibility", isVisible ? L"No" : L"Yes", iniPath.c_str());
     }
 }
-
-// Assume mutexHandle is a global variable or accessible where needed
-extern HANDLE mutexHandle; // The handle for the mutex created in WinMain
 
 void RestartApplication() {
     // Ensure all cleanup is done before restarting, including releasing the mutex
@@ -600,7 +595,6 @@ bool isAlreadyRunning() {
     CloseHandle(hMutex);
     return false;
 }
-
 
 void UpdateMenuCheckMarks(HWND hwnd) {
     HMENU hMenu = GetMenu(hwnd); // Assuming hWnd is your main window's handle

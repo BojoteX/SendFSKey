@@ -1,9 +1,9 @@
 #include <Windows.h>
-#include <strsafe.h>
-#include <string>
-#include <thread>
+// #include <strsafe.h>
+// #include <string>
+// #include <thread>
 #include <sstream>
-#include "framework.h"
+// #include "framework.h"
 #include "SendFSKey.h"
 #include "Globals.h"
 #include "utilities.h"
@@ -19,9 +19,6 @@ LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-// Global variables for the README.md dialog
-// HWND hDlg = NULL; // Handle to the dialog box
-
 // Global variables
 HINSTANCE g_hInst = NULL;  // Definition
 HINSTANCE g_hInst_client = NULL;  // Definition
@@ -34,6 +31,7 @@ HANDLE guiReadyEvent = NULL; // Initialization at declaration
 HWND hStaticServer = NULL; // Handle to your server edit control
 HWND hStaticClient = NULL; // Handle to your client edit control
 
+// Status bar handles
 HWND hWndStatusBarClient = NULL;
 HWND hWndStatusBarServer = NULL;
 
@@ -367,8 +365,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             MessageBox(NULL, L"Insufficient privileges to send input to Flight Simulator. Please run this application as an administrator or add the application to your Flight Simulator exe.xml.", L"Permission Error", MB_ICONERROR);
         }
 
-
-
         // Default values for windowName and className, will be set conditionally below if we need to change them
         wchar_t const* windowName = L"SendFSKey - Server";
         wchar_t const* className = L"BojoteApp";
@@ -436,14 +432,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             WS_CHILD | WS_VISIBLE,              // styles
             0, 0, 0, 0,                         // x, y, cx, cy
             hWndServer,                         // parent window
-            (HMENU)IDC_STATUSBAR_CLIENT,        // child window ID
+            (HMENU)IDC_STATUSBAR_SERVER,        // child window ID
             hInstance,                          // instance
             NULL                              // no window creation data
         );
 
         // Check if the static control was created successfully.
         if (!hWndStatusBarServer) {
-            wprintf(L"Could not create status bar for client\n");
+            wprintf(L"Could not create status bar for server\n");
             return -1; // Handlestatus bar creation failure.
         }
         else {
@@ -452,7 +448,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             SendMessage(hWndStatusBarServer, SB_SETTEXT, 0 | SBT_POPOUT, (LPARAM)L" Server Mode");
             SendMessage(hWndStatusBarServer, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)L" Server not started");
         }
-
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
@@ -512,10 +507,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         // This is the server window loop
         if (DEBUG) wprintf(L"GUI WindowProcess loop starting. We can now send messages to the server GUI.\n");
 
-        // This will pause (in a separate thread) until the parent process exits, 
-        // then will resume but since we did PostQuitMessage(0) inside the thread the line below that enters the message 
-        // loop will exit immediately and the application will close after cleaning up.
-        monitorParentProcess(); // Monitor the parent process
+        monitorParentProcess(); // Monitor the parent process but only if it is flight simulator
 
         while (GetMessage(&msg_server, nullptr, 0, 0)) {
             TranslateMessage(&msg_server);
@@ -555,7 +547,6 @@ INT_PTR CALLBACK ExperimentoDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
             DestroyWindow(hDlg); // Instead of EndDialog
-            // EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
         }
     }
