@@ -13,7 +13,6 @@
 // Declare a brush for the static control background globally or at a suitable scope
 HBRUSH hStaticBkBrush = CreateSolidBrush(RGB(240, 240, 240)); // Light grey background
 
-
 // Function prototypes
 LRESULT CALLBACK ServerWindowProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK ClientWindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -35,13 +34,16 @@ HANDLE guiReadyEvent = NULL; // Initialization at declaration
 HWND hStaticServer = NULL; // Handle to your server edit control
 HWND hStaticClient = NULL; // Handle to your client edit control
 
+HWND hWndStatusBarClient = NULL;
+HWND hWndStatusBarServer = NULL;
+
 // Default values for the client and server Windows
 int PADDING = 10;
 int DEFAULT_WIDTH = 570;
-int DEFAULT_HEIGHT = 180;
+int DEFAULT_HEIGHT = 150;
 int STATIC_DEFAULT_WIDTH = DEFAULT_WIDTH - (PADDING * 4);
-int STATIC_DEFAULT_HEIGHT = DEFAULT_HEIGHT - (PADDING * 8);
-int FONT_SIZE = 18;
+int STATIC_DEFAULT_HEIGHT = DEFAULT_HEIGHT - (PADDING * 10);
+int FONT_SIZE = 17;
 std::wstring FONT_TYPE = L"Segoe UI Variable"; // was Segoe UI Variable
 
 // Message loop for client and server
@@ -168,6 +170,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     int exitCode = 0; // Default exit code
 
+    INITCOMMONCONTROLSEX icex;
+    icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+    icex.dwICC = ICC_BAR_CLASSES;  // Load status bar class.
+    InitCommonControlsEx(&icex);
+
     // Dont Modify anything BELOW this line...
 
     if (isClientMode) {
@@ -240,6 +247,31 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         if (!hStaticClient) {
             wprintf(L"Could not create static control for client\n");
             return -1; // Handle static control creation failure.
+        }
+
+        hWndStatusBarClient = CreateWindowEx(
+            0,                                  // no extended styles
+            STATUSCLASSNAME,                    // name of status bar class
+            (PCTSTR)NULL,                       // no text when first created
+            SBARS_SIZEGRIP |                    // includes a sizing grip
+            WS_CHILD | WS_VISIBLE,              // styles
+            0, 0, 0, 0,                         // x, y, cx, cy
+            hWndClient,                         // parent window
+            (HMENU)IDC_STATUSBAR_CLIENT,        // child window ID
+            hInstance,                          // instance
+            NULL                              // no window creation data
+        );
+
+        // Check if the static control was created successfully.
+        if (!hWndStatusBarClient) {
+            wprintf(L"Could not create status bar for client\n");
+            return -1; // Handlestatus bar creation failure.
+        }
+        else {
+            int parts[] = { 370, -1 }; // Two parts, second one takes the rest
+            SendMessage(hWndStatusBarClient, SB_SETPARTS, sizeof(parts) / sizeof(int), (LPARAM)parts);
+            SendMessage(hWndStatusBarClient, SB_SETTEXT, 0 | SBT_POPOUT, (LPARAM)L" Client Mode");
+            SendMessage(hWndStatusBarClient, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)L"Not Connected");
         }
 
         HFONT hFontStatic = CreateFont(
@@ -395,6 +427,32 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             wprintf(L"Could not create static control for server\n");
             return -1; // Handle static control creation failure.
         }
+
+        hWndStatusBarServer = CreateWindowEx(
+            0,                                  // no extended styles
+            STATUSCLASSNAME,                    // name of status bar class
+            (PCTSTR)NULL,                       // no text when first created
+            SBARS_SIZEGRIP |                    // includes a sizing grip
+            WS_CHILD | WS_VISIBLE,              // styles
+            0, 0, 0, 0,                         // x, y, cx, cy
+            hWndServer,                         // parent window
+            (HMENU)IDC_STATUSBAR_CLIENT,        // child window ID
+            hInstance,                          // instance
+            NULL                              // no window creation data
+        );
+
+        // Check if the static control was created successfully.
+        if (!hWndStatusBarServer) {
+            wprintf(L"Could not create status bar for client\n");
+            return -1; // Handlestatus bar creation failure.
+        }
+        else {
+            int parts[] = { 370, -1 }; // Two parts, second one takes the rest
+            SendMessage(hWndStatusBarServer, SB_SETPARTS, sizeof(parts) / sizeof(int), (LPARAM)parts);
+            SendMessage(hWndStatusBarServer, SB_SETTEXT, 0 | SBT_POPOUT, (LPARAM)L" Server Mode");
+            SendMessage(hWndStatusBarServer, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)L" Server not started");
+        }
+
 
         // Set the font for the static control to the modern Segoe UI.
         HFONT hFontStatic = CreateFont(
@@ -552,6 +610,9 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
         ShowWindow(GetDlgItem(hDlg, IDC_IPADDRESSTEXT), SW_HIDE);
         ShowWindow(GetDlgItem(hDlg, IDC_IPADDRTEXT), SW_HIDE);
 
+        // Set the focus to the combo box in case the app was running minimized
+        SetForegroundWindow(hDlg);
+
         return TRUE; // Return TRUE to set the keyboard focus to the control specified by wParam.
     }
     case WM_COMMAND: {
@@ -626,6 +687,24 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+
+    case WM_SIZE:{
+
+        // Get the new width of the window
+        int newWidth = LOWORD(lp);
+
+        // Calculate new right edges for the status bar parts
+        int partWidths[2]; // Array to hold new right edges for parts
+        partWidths[0] = newWidth / 3; // First part takes a third of the width
+        partWidths[1] = -1; // Second part takes the rest
+
+        // Update the status bar parts
+        SendMessage(hWndStatusBarClient, SB_SETPARTS, (WPARAM)2, (LPARAM)partWidths);
+
+        SendMessage(hWndStatusBarClient, WM_SIZE, wp, lp);
+
+        break;
+	}
     case WM_COMMAND: {
         int wmId = LOWORD(wp);
         switch (wmId) {
@@ -758,12 +837,27 @@ LRESULT CALLBACK ClientWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 LRESULT CALLBACK ServerWindowProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
 
-    case WM_SIZE:
+    case WM_SIZE: {
+
+        // Get the new width of the window
+        int newWidth = LOWORD(lp);
+
+        // Calculate new right edges for the status bar parts
+        int partWidths[2]; // Array to hold new right edges for parts
+        partWidths[0] = newWidth / 3; // First part takes a third of the width
+        partWidths[1] = -1; // Second part takes the rest
+
+        // Update the status bar parts
+        SendMessage(hWndStatusBarServer, SB_SETPARTS, (WPARAM)2, (LPARAM)partWidths);
+
+        SendMessage(hWndStatusBarServer, WM_SIZE, wp, lp);
+
         if (wp == SIZE_MINIMIZED && start_minimized == L"Yes") {
             MinimizeToTray(hWnd);
             ShowWindow(hWnd, SW_HIDE); // Hide the window
         }
         break;
+    }
     case WM_TRAYICON: {
 
 		if (lp == WM_LBUTTONDBLCLK) {

@@ -8,7 +8,9 @@
 #include <Richedit.h>
 #include <codecvt>
 #include "Globals.h"
-
+#include <regex>
+#include <vector>
+#include <iostream>
 
 // Tell the linker to include the Version library
 #pragma comment(lib, "Version.lib")
@@ -582,14 +584,23 @@ void monitorParentProcess() {
 }
 
 bool isAlreadyRunning() {
-	// Check if the application is already running
-	HANDLE hMutex = CreateMutex(NULL, TRUE, L"SendFSKeyMutex");
+    // Check if the application is already running
+    HANDLE hMutex = CreateMutex(NULL, TRUE, L"SendFSKeyMutex");
+    if (hMutex == NULL) {
+        // Handle error condition if necessary
+        return false; // Or true, depending on how you want to handle mutex creation failure
+    }
+
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-		CloseHandle(hMutex);
+        CloseHandle(hMutex);
         return true;
-	}
-	return false;
+    }
+    // If we reach here, we're the first instance but should close the mutex handle
+    // when we're done with it, not here
+    CloseHandle(hMutex);
+    return false;
 }
+
 
 void UpdateMenuCheckMarks(HWND hwnd) {
     HMENU hMenu = GetMenu(hwnd); // Assuming hWnd is your main window's handle
@@ -598,26 +609,90 @@ void UpdateMenuCheckMarks(HWND hwnd) {
 }
 
 std::wstring MarkdownToRtf(const std::string& markdown) {
-    std::wstring rtfHeader = L"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\n";
-    std::wstring rtfFooter = L"}";
-    std::wstring rtfContent;
+    const size_t lineWidth = 150; // Hardcoded width limit for wrapping text
+    // Define the colors we extracted
+    std::wstring rtfColorTable = L"{\\colortbl ;"
+        L"\\red109\\green75\\blue34;"    // Note color
+        L"\\red22\\green27\\blue34;"     // Tip color
+        L"\\red139\\green133\\blue106;"  // Important color
+        L"\\red0\\green76\\blue71;"      // Warning color
+        L"\\red22\\green27\\blue34;"     // Caution color (seems the same as Tip, you may need to adjust this)
+        L"}\n";
 
-    // Simple Markdown to RTF conversion for headers and emphasis
+    // Other RTF header content
+    std::wstring rtfHeader = L"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Segoe UI Variable;}}\n";
+
+    // Start with the color table after the font table in the header
+    std::wstring rtfContent = rtfHeader + rtfColorTable;
+
     std::istringstream iss(markdown);
     std::string line;
     while (std::getline(iss, line)) {
-        if (line.substr(0, 2) == "# ") { // Header 1
-            rtfContent += L"\\fs48 \\b " + std::wstring(line.begin() + 2, line.end()) + L"\\b0\\par\n";
+        // Check for headers
+        if (line.substr(0, 2) == "# ") {
+            rtfContent += L"\\fs28 \\b " + std::wstring(line.begin() + 2, line.end()) + L"\\b0\\par\n";
+            continue;
         }
-        else if (line.substr(0, 3) == "## ") { // Header 2
-            rtfContent += L"\\fs36 \\b " + std::wstring(line.begin() + 3, line.end()) + L"\\b0\\par\n";
+        else if (line.substr(0, 3) == "## ") {
+            rtfContent += L"\\fs24 \\b " + std::wstring(line.begin() + 3, line.end()) + L"\\b0\\par\n";
+            continue;
         }
-        else { // Regular text
-            rtfContent += std::wstring(line.begin(), line.end()) + L"\\par\n";
+        else if (line.substr(0, 4) == "### ") {
+            rtfContent += L"\\fs22 \\b " + std::wstring(line.begin() + 4, line.end()) + L"\\b0\\par\n";
+            continue;
+        }
+
+        // Now let's add the handling for the special prefixes
+        std::wstring prefix;
+        if (line.rfind("!NOTE", 0) == 0) {
+            prefix = L"\\cf1 "; // Note color
+            line = line.substr(5); // Strip the prefix
+        }
+        else if (line.rfind("!TIP", 0) == 0) {
+            prefix = L"\\cf2 "; // Tip color
+            line = line.substr(4); // Strip the prefix
+        }
+        else if (line.rfind("!IMPORTANT", 0) == 0) {
+            prefix = L"\\cf3 "; // Important color
+            line = line.substr(10); // Strip the prefix
+        }
+        else if (line.rfind("!WARNING", 0) == 0) {
+            prefix = L"\\cf4 "; // Warning color
+            line = line.substr(8); // Strip the prefix
+        }
+        else if (line.rfind("!CAUTION", 0) == 0) {
+            prefix = L"\\cf5 "; // Caution color
+            line = line.substr(8); // Strip the prefix
+        }
+
+        // Apply Markdown-to-RTF style conversions
+        line = std::regex_replace(line, std::regex("\\*\\*\\*(.*?)\\*\\*\\*"), "{\\b\\i $1\\i0\\b0}");
+        line = std::regex_replace(line, std::regex("\\*\\*(.*?)\\*\\*"), "{\\b $1\\b0}");
+        line = std::regex_replace(line, std::regex("\\*(.*?)\\*"), "{\\i $1\\i0}");
+        line = std::regex_replace(line, std::regex("~~(.*?)~~"), "{\\strike $1\\strike0}");
+        std::wstring wLine(line.begin(), line.end());
+
+        // If we have a prefix, add it to the line
+        if (!prefix.empty()) {
+            wLine = L"{" + prefix + wLine + L"\\cf0}";
+        }
+
+        // Wrap the processed line at the specified width
+        size_t start = 0;
+        while (start < wLine.length()) {
+            size_t end = start + lineWidth < wLine.length() ? start + lineWidth : wLine.length();
+            if (end < wLine.length()) {
+                size_t lastSpace = wLine.rfind(L' ', end);
+                if (lastSpace != std::wstring::npos && lastSpace > start) {
+                    end = lastSpace;
+                }
+            }
+            rtfContent += wLine.substr(start, end - start) + L"\\par\n";
+            start = end + (start < wLine.length() && wLine[end] == L' ' ? 1 : 0);
         }
     }
-
-    return rtfHeader + rtfContent + rtfFooter;
+    std::wstring rtfFooter = L"}";
+    return rtfContent + rtfFooter;
 }
 
 std::string Utf16ToUtf8(const std::wstring& utf16Str)

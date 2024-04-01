@@ -2,6 +2,7 @@
 #include <ws2tcpip.h>
 #include "NetworkClient.h"
 
+
 // Define the expected server signature
 const char* EXPECTED_SERVER_SIGNATURE = "SendFSKeySSv1";
 
@@ -132,9 +133,11 @@ bool establishConnection() {
 
             // Create the message to be sent
             std::wstring message = L"Connected succesfully to " + serverIPconf;
+            std::wstring message_status_bar = L"Connected to " + serverIPconf;
 
             // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
             SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)message.c_str());
+            SendMessage(hWndStatusBarClient, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)message_status_bar.c_str());
 
             return true; // Connection and verification successful
         }
@@ -148,9 +151,11 @@ bool establishConnection() {
         printf("Connection timed out, failed or server is not running.\n");
         SendMessage(hStaticClient, WM_SETTEXT, 0, (LPARAM)L"Connection timed out or failed");
 
-        if(!isReconnecting)
+        if(!isReconnecting and start_minimized == L"No")
             MessageBox(NULL, L"Failed to connect to server. Check SendFSKey is running on the remote computer in 'Server Mode'", L"Network Error", MB_ICONERROR | MB_OK);
     }
+
+    SendMessage(hWndStatusBarClient, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)L"Not Connected");
 
     // Cleanup on failure
     closesocket(g_persistentSocket);
@@ -191,6 +196,7 @@ void sendKeyPress(UINT keyCode, bool isKeyDown) {
         std::this_thread::sleep_for(std::chrono::seconds(2)); // Initial pause before attempting to reconnect
 
         if (!isReconnecting.exchange(true)) {
+            SendMessage(hWndStatusBarClient, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)L"Reconnecting...");
             printf("Connection error. Attempting to reconnect...\n");
             closeClientConnection(); // Close the existing connection
 

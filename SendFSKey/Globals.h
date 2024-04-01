@@ -4,6 +4,9 @@
 #include <mutex>
 #include <queue>
 #include <shellapi.h>
+#include <commctrl.h>
+
+#pragma comment(lib, "comctl32.lib")
 
 #define WM_TRAYICON (WM_USER + 1)
 
@@ -14,6 +17,9 @@ extern std::queue<std::pair<UINT, bool>> keyEventQueue;
 // My Globals
 extern bool DEBUG;
 extern HANDLE guiReadyEvent;
+extern HWND hWndStatusBarClient; 
+extern HWND hWndStatusBarServer;
+
 extern HWND hStaticServer;
 extern HWND hStaticClient;
 extern HINSTANCE g_hInst;
@@ -21,6 +27,7 @@ extern HINSTANCE g_hInst_client;
 extern HINSTANCE g_hInst_server;
 extern bool isClientMode;
 extern std::atomic<bool> serverRunning;
+extern bool isConnected;
 extern std::wstring serverIP;
 extern bool queueKeys;
 extern int maxQueueSize;
@@ -39,7 +46,6 @@ extern int port;
 
 // To use from anywhere
 std::wstring getServerIPAddress();
-std::wstring FormatForDisplay(const std::string& data);
 
 // Key pressing functions
 void sendKeyPress(UINT keyCode, bool isKeyDown); // Used by client to send key presses

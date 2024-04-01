@@ -59,6 +59,7 @@
 #define ID_TRAY_OPEN                    32796
 #define ID_TRAY_CONSOLE                 32797
 #define ID_OPTIONS_MINIMIZEONSTART      32798
+#define IDC_STATUSBAR_CLIENT			32799
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

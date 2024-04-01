@@ -197,6 +197,9 @@ bool initializeServer() {
 
     // Create the message to be sent
     std::wstring message = L"Server started on IP address " + serverIP;
+    std::wstring message_started = L"Listening on " + serverIP;
+
+    SendMessage(hWndStatusBarServer, SB_SETTEXT, 1 | SBT_POPOUT, (LPARAM)message_started.c_str());
 
     // Update the server status in the UI and display the IP address using the IP obtained for serverAddr using inet_ntop like this
     SendMessage(hStaticServer, WM_SETTEXT, 0, (LPARAM)message.c_str());
