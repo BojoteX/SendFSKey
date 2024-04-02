@@ -1,5 +1,4 @@
 // SendInput.cpp
-// #include <stdio.h>
 #include <Windows.h>
 #include "Globals.h"
 
@@ -147,6 +146,15 @@ UINT ServerKeyPressDOWN(UINT KeyCode) {
 
     // We only want to send the key press if the MSFS window is in focus, if not, we bring it to focus
     BringWindowToForegroundByClassName(target_window.c_str());
+
+    /*
+
+    // Log the KEY_DOWN on the server side
+    std::wstringstream logStream;
+    logStream << L"Key pressed: " << KeyCode;
+    Logger::GetInstance()->log(logStream.str());
+
+    */
 
     if (USE_SCAN_CODE) {
         SendDOWNKeyWithScanCode(KeyCode);

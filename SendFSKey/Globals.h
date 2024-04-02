@@ -1,14 +1,15 @@
 #pragma once
 
-#include <atomic>
 #include <mutex>
+#include <atomic>
 #include <queue>
-// #include <shellapi.h>
 #include <commctrl.h>
+#include "framework.h"
+#include "SendFSKey.h"
+// #include "utilities.h"
+// #include "Logger.h"
 
 #pragma comment(lib, "comctl32.lib")
-
-#define WM_TRAYICON (WM_USER + 1)
 
 // For Queue management
 extern std::mutex queueMutex;
@@ -44,7 +45,7 @@ extern std::wstring start_minimized;
 extern int port;
 
 // To use from anywhere
-std::wstring getServerIPAddress();
+// std::wstring getServerIPAddress();
 
 // Key pressing functions
 void sendKeyPress(UINT keyCode, bool isKeyDown); // Used by client to send key presses
@@ -53,15 +54,15 @@ UINT ServerKeyPressDOWN(UINT KeyCode); // Used by server to send key presses
 UINT ServerKeyPressUP(UINT KeyCode); // Used by server to send key releases
 
 // Server functions
-void serverStartThread();
-void cleanupServer();
-void shutdownServer();
-void startServer(); 
-bool isServerUp(); // Used to check if server is running
-bool verifyServerSignature(SOCKET serverSocket); // Used to verify server signature
+// void serverStartThread();
+// void cleanupServer();
+// void shutdownServer();
+// void startServer(); 
+// bool isServerUp(); // Used to check if server is running
+// bool verifyServerSignature(SOCKET serverSocket); // Used to verify server signature
 
 // Client functions
-void closeClientConnection();
-void cleanupWinsock();
-bool establishConnection();
-void clientConnectionThread();
+// void closeClientConnection();
+// void cleanupWinsock();
+// bool establishConnection();
+// void clientConnectionThread();

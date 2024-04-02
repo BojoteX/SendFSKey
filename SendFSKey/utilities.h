@@ -1,28 +1,21 @@
 #pragma once
 
+#include <thread>
 #include <shlobj.h>
 #include <fstream>
 #include <TlHelp32.h>
 #include <unordered_map>
-// #include <shellapi.h>
 #include <Richedit.h>
-// #include <codecvt>
-// #include "Globals.h"
 #include <regex>
-// #include <vector>
-// #include <iostream>
+#include "Globals.h"
+#include "SendFSKey.h"
+#include "NetworkClient.h"
+#include "NetworkServer.h"
 
 // Tell the linker to include the Version library
 #pragma comment(lib, "Version.lib")
 
-// Global scope or within a class/structure as needed
-NOTIFYICONDATA nid = {}; // Zero-initialize the structure
-
-// Debug mode (.ini file will override this)
-bool DEBUG = FALSE;
-
-// This allows us to restart the application wuthout having to close the current instance
-HANDLE mutexHandle = NULL; // Initialization to ensure it starts as NULL
+#define WM_TRAYICON (WM_USER + 1)
 
 // .ini Settings defaults
 int port = 8028; // Default port can be changed in the INI file
@@ -37,6 +30,17 @@ std::wstring start_minimized = L"No";
 // .ini file settings definitions only
 bool queueKeys;
 int maxQueueSize; // Maximum number of keys to queue, its hardcoded to 4 for now
+
+// Global scope or within a class/structure as needed
+NOTIFYICONDATA nid = {}; // Zero-initialize the structure
+
+// Debug mode (.ini file will override this)
+bool DEBUG = FALSE;
+
+// This allows us to restart the application wuthout having to close the current instance
+HANDLE mutexHandle = NULL; // Initialization to ensure it starts as NULL
+
+
 
 // Global variable to check if the application has permission to send keys and check if the process is running
 bool has_permission = false;
@@ -376,11 +380,40 @@ DWORD GetProcessIntegrityLevel(HANDLE tokenHandle) {
     return integrityLevel;
 }
 
+bool IsAppRunningAsAdmin() {
+    bool isAdmin = false;
+    HANDLE tokenHandle = NULL;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tokenHandle)) {
+        // Get the size of the token's integrity level information.
+        DWORD tokenInfoLength = 0;
+        GetTokenInformation(tokenHandle, TokenIntegrityLevel, NULL, 0, &tokenInfoLength);
+        TOKEN_MANDATORY_LABEL* tokenLabel = (TOKEN_MANDATORY_LABEL*)LocalAlloc(LPTR, tokenInfoLength);
+
+        if (tokenLabel != NULL) {
+            if (GetTokenInformation(tokenHandle, TokenIntegrityLevel, tokenLabel, tokenInfoLength, &tokenInfoLength)) {
+                DWORD integrityLevel = *GetSidSubAuthority(tokenLabel->Label.Sid,
+                    (DWORD)(UCHAR)(*GetSidSubAuthorityCount(tokenLabel->Label.Sid) - 1));
+
+                // Security identifier (SID) that represents a high integrity level is S-1-16-12288.
+                // We check if the current process's integrity level is high or higher (system).
+                if (integrityLevel >= SECURITY_MANDATORY_HIGH_RID) {
+                    isAdmin = true;
+                }
+            }
+            LocalFree(tokenLabel);
+        }
+        CloseHandle(tokenHandle);
+    }
+
+    return isAdmin;
+}
+
 void CheckApplicationPrivileges() {
     HWND hwndFlightSim = FindWindow(target_window.c_str(), NULL);
     if (!hwndFlightSim) {
-        has_permission = false;
         is_flightsimulator_running = false;
+        // Directly check if running as admin before deciding on permissions.
+        has_permission = IsAppRunningAsAdmin();
         return;
     }
     else {
@@ -392,16 +425,18 @@ void CheckApplicationPrivileges() {
 
     HANDLE targetProcessHandle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, targetProcessId);
     if (!targetProcessHandle) {
-        has_permission = false;
         // Keep is_flightsimulator_running as true since the window was found
+        // Final check for admin privileges if cannot open process.
+        has_permission = IsAppRunningAsAdmin();
         return;
     }
 
     HANDLE targetTokenHandle;
     if (!OpenProcessToken(targetProcessHandle, TOKEN_QUERY, &targetTokenHandle)) {
         CloseHandle(targetProcessHandle);
-        has_permission = false;
         // Keep is_flightsimulator_running as true since the window was found
+        // Final check for admin privileges if cannot open token.
+        has_permission = IsAppRunningAsAdmin();
         return;
     }
 
@@ -412,79 +447,18 @@ void CheckApplicationPrivileges() {
     HANDLE currentProcessHandle = GetCurrentProcess();
     HANDLE currentTokenHandle;
     if (!OpenProcessToken(currentProcessHandle, TOKEN_QUERY, &currentTokenHandle)) {
-        has_permission = false;
         // Keep is_flightsimulator_running as true since the window was found
+        // Final check for admin privileges if cannot open current process token.
+        has_permission = IsAppRunningAsAdmin();
         return;
     }
 
     DWORD currentIntegrityLevel = GetProcessIntegrityLevel(currentTokenHandle);
     CloseHandle(currentTokenHandle);
 
-    has_permission = currentIntegrityLevel >= targetIntegrityLevel;
-}
-
-void MinimizeToTray(HWND hWnd) {
-    nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.hWnd = hWnd;
-    nid.uID = 1;
-    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_INFO;
-    nid.uCallbackMessage = WM_TRAYICON;
-
-    // Load the tray icon
-    nid.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY));
-    if (!nid.hIcon) {
-        MessageBox(NULL, L"Failed to load icon", L"Error", MB_ICONERROR);
-    }
-
-    // Load the balloon notification icon
-#pragma warning(push)
-#pragma warning(disable : 4302)
-    nid.hBalloonIcon = (HICON)LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR);
-#pragma warning(pop)
-    if (!nid.hBalloonIcon) {
-        MessageBox(NULL, L"Failed to load balloon icon", L"Error", MB_ICONERROR);
-    }
-
-    // Set the tooltip text to the file description
-    std::wstring FileDescription = GetSimpleVersionInfo(L"FileDescription");
-    wcsncpy_s(nid.szTip, _countof(nid.szTip), FileDescription.c_str(), _countof(nid.szTip) - 1);
-
-    // Set up balloon notification text
-    nid.dwInfoFlags = NIIF_USER; // Use the user-defined icon for the balloon
-    wcscpy_s(nid.szInfo, _countof(nid.szInfo), L"Application minimized to tray.");
-    wcscpy_s(nid.szInfoTitle, _countof(nid.szInfoTitle), L"SendFSKey");
-
-    // Add the icon to the system tray
-    Shell_NotifyIcon(NIM_ADD, &nid);
-}
-
-void RestoreFromTray(HWND hWnd) {
-    ShowWindow(hWnd, SW_SHOW);
-    Shell_NotifyIcon(NIM_DELETE, &nid);
-}
-
-void ShowContextMenu(HWND hWnd, POINT curPoint)
-{
-    // Create a menu or load it from resources
-    HMENU hPopupMenu = CreatePopupMenu();
-    if (!hPopupMenu) return;
-
-    // Append menu items
-    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_OPEN, L"Open");
-    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_CONSOLE, L"Toggle Console");
-
-    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Shutdown");
-
-    // Add more items here
-
-    // Set the default menu item (optional)
-    SetMenuDefaultItem(hPopupMenu, ID_TRAY_OPEN, FALSE);
-
-    // Display the menu
-    TrackPopupMenu(hPopupMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, curPoint.x, curPoint.y, 0, hWnd, NULL);
-
-    // Clean up
-    DestroyMenu(hPopupMenu);
+    // Here, has_permission is true if the current process's integrity level is 
+    // equal to or higher than the target's, OR if the app is running as admin.
+    has_permission = (currentIntegrityLevel >= targetIntegrityLevel) || IsAppRunningAsAdmin();
 }
 
 HANDLE GetParentProcessHandle(DWORD& outParentPID) {
@@ -587,13 +561,79 @@ bool isAlreadyRunning() {
     }
 
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        CloseHandle(hMutex);
+        CloseHandle(hMutex); // Close the handle if we're not the first instance
         return true;
     }
-    // If we reach here, we're the first instance but should close the mutex handle
-    // when we're done with it, not here
-    CloseHandle(hMutex);
+
+    // No need to close the mutex handle here if this is the first instance.
+    // The handle will be automatically closed when the application exits.
+    // You can store hMutex globally if you want to explicitly release it on application exit,
+    // but it's not strictly necessary.
     return false;
+}
+
+void MinimizeToTray(HWND hWnd) {
+    nid.cbSize = sizeof(NOTIFYICONDATA);
+    nid.hWnd = hWnd;
+    nid.uID = 1;
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_INFO;
+    nid.uCallbackMessage = WM_TRAYICON;
+
+    // Load the tray icon
+    nid.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY));
+    if (!nid.hIcon) {
+        MessageBox(NULL, L"Failed to load icon", L"Error", MB_ICONERROR);
+    }
+
+    // Load the balloon notification icon
+#pragma warning(push)
+#pragma warning(disable : 4302)
+    nid.hBalloonIcon = (HICON)LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_SENDFSKEY), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR);
+#pragma warning(pop)
+    if (!nid.hBalloonIcon) {
+        MessageBox(NULL, L"Failed to load balloon icon", L"Error", MB_ICONERROR);
+    }
+
+    // Set the tooltip text to the file description
+    std::wstring FileDescription = GetSimpleVersionInfo(L"FileDescription");
+    wcsncpy_s(nid.szTip, _countof(nid.szTip), FileDescription.c_str(), _countof(nid.szTip) - 1);
+
+    // Set up balloon notification text
+    nid.dwInfoFlags = NIIF_USER; // Use the user-defined icon for the balloon
+    wcscpy_s(nid.szInfo, _countof(nid.szInfo), L"Application minimized to tray.");
+    wcscpy_s(nid.szInfoTitle, _countof(nid.szInfoTitle), L"SendFSKey");
+
+    // Add the icon to the system tray
+    Shell_NotifyIcon(NIM_ADD, &nid);
+}
+
+void RestoreFromTray(HWND hWnd) {
+    ShowWindow(hWnd, SW_SHOW);
+    Shell_NotifyIcon(NIM_DELETE, &nid);
+}
+
+void ShowContextMenu(HWND hWnd, POINT curPoint)
+{
+    // Create a menu or load it from resources
+    HMENU hPopupMenu = CreatePopupMenu();
+    if (!hPopupMenu) return;
+
+    // Append menu items
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_OPEN, L"Open");
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_CONSOLE, L"Toggle Console");
+
+    InsertMenu(hPopupMenu, -1, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Shutdown");
+
+    // Add more items here
+
+    // Set the default menu item (optional)
+    SetMenuDefaultItem(hPopupMenu, ID_TRAY_OPEN, FALSE);
+
+    // Display the menu
+    TrackPopupMenu(hPopupMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, curPoint.x, curPoint.y, 0, hWnd, NULL);
+
+    // Clean up
+    DestroyMenu(hPopupMenu);
 }
 
 void UpdateMenuCheckMarks(HWND hwnd) {

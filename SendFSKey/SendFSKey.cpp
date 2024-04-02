@@ -1,12 +1,8 @@
+// SendFSKey.cpp
 #include <Windows.h>
-// #include <strsafe.h>
-// #include <string>
-// #include <thread>
 #include <sstream>
-// #include "framework.h"
-#include "SendFSKey.h"
-#include "Globals.h"
 #include "utilities.h"
+#include "Globals.h"
 #include "NetworkClient.h"
 #include "NetworkServer.h"
 
@@ -56,9 +52,6 @@ WNDCLASS ws = { 0 };
 wchar_t const* windowName;
 wchar_t const* className;
 
-// Operation mode
-bool isClientMode;
-
 // Our ini file path
 std::wstring iniPath = GetAppDataLocalSendFSKeyDir() + L"\\SendFSKey.ini"; // Build the full INI file path
 
@@ -67,6 +60,9 @@ std::wstring companyName = GetSimpleVersionInfo(L"CompanyName");
 std::wstring productName = GetSimpleVersionInfo(L"ProductName");
 std::wstring legalCopyright = GetSimpleVersionInfo(L"LegalCopyright");
 std::wstring productVersion = GetSimpleVersionInfo(L"ProductVersion");
+
+// Operation mode
+bool isClientMode;
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 

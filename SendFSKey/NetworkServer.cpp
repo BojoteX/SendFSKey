@@ -1,5 +1,7 @@
+// NetworkServer.cpp
 #include <thread>
 #include <ws2tcpip.h>
+#include "Globals.h"
 #include "NetworkServer.h"
 
 // Define the expected server signature
