@@ -1,12 +1,4 @@
-/*
-#include <shlobj.h> // For SHGetFolderPathW
 #include <windows.h>
-#include <fstream>
-#include <mutex>
-#include <string>
-#include <chrono>
-#include <sstream>
-#include <iomanip>
 #include "Globals.h"
 #include "utilities.h"
 #include "Logger.h"
@@ -42,4 +34,3 @@ void Logger::log(const std::wstring& message) {
 
     outFile << dateTime.str() << L" - " << message << std::endl;
 }
-*/

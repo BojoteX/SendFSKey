@@ -1,6 +1,7 @@
 // SendInput.cpp
 #include <Windows.h>
 #include "Globals.h"
+#include "Utilities.h"
 
 // Change how we send the keys
 bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with keys like SHIFT so we never use it)

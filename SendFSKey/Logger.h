@@ -1,12 +1,8 @@
-/*
 #pragma once
 
-#include <mutex>
 #include <fstream>
-#include <string> // Include for std::wstring
 #include <sstream>
 #include <iomanip>
-
 
 class Logger {
 public:
@@ -27,4 +23,3 @@ private:
     // Helper method to format the current time.
     std::wstring GetCurrentTimeFormatted();
 };
-*/
