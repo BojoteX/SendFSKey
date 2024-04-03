@@ -4,6 +4,7 @@
 #include "Utilities.h"
 #include "NetworkClient.h"
 #include "NetworkServer.h"
+#include "Logger.h"
 
 // Declare a brush for the static control background globally or at a suitable scope
 HBRUSH hStaticBkBrush = CreateSolidBrush(RGB(240, 240, 240)); // Light grey background
@@ -167,6 +168,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
     icex.dwICC = ICC_BAR_CLASSES;  // Load status bar class.
     InitCommonControlsEx(&icex);
+
+    // Start the Log
+    if (DEBUG) {
+        std::wstringstream logStream;
+        logStream << L"Logging started";
+        Logger::GetInstance()->log(logStream.str());
+    }
 
     // Dont Modify anything BELOW this line...
 
