@@ -1,9 +1,20 @@
+// Logger.cpp
 #include <windows.h>
 #include "Globals.h"
 #include "utilities.h"
 #include "Logger.h"
 
-// Logger class constructor
+Logger* Logger::instance = nullptr;
+
+Logger* Logger::GetInstance(const std::wstring& logFile) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (instance == nullptr) {
+        instance = new Logger(logFile);
+    }
+    return instance;
+}
+
 Logger::Logger(const std::wstring& logFileName) {
     std::wstring logFilePath = GetAppDataLocalSendFSKeyDir() + L"\\" + logFileName;
     outFile.open(logFilePath, std::ios::out | std::ios::app);
@@ -12,14 +23,12 @@ Logger::Logger(const std::wstring& logFileName) {
     }
 }
 
-// Logger class destructor
 Logger::~Logger() {
     if (outFile.is_open()) {
         outFile.close();
     }
 }
 
-// Log a message
 void Logger::log(const std::wstring& message) {
     std::lock_guard<std::mutex> lock(mu);
     auto now = std::chrono::system_clock::now();
@@ -27,8 +36,8 @@ void Logger::log(const std::wstring& message) {
     auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
     std::wstringstream dateTime;
-    std::tm nowTm = {}; // Initialize tm structure
-    localtime_s(&nowTm, &nowTimeT); // Secure alternative to localtime
+    std::tm nowTm = {};
+    localtime_s(&nowTm, &nowTimeT);
     dateTime << std::put_time(&nowTm, L"%Y-%m-%d %H:%M:%S");
     dateTime << L'.' << std::setfill(L'0') << std::setw(3) << nowMs.count();
 

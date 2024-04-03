@@ -2,19 +2,20 @@
 #include <Windows.h>
 #include "Globals.h"
 #include "Utilities.h"
+#include "Logger.h"
 
 // Change how we send the keys
 bool USE_SCAN_CODE = 1; // 1 USES HARDWARE SCAN CODES - 0 USES VK KeyCodes (VK Codes have issues with keys like SHIFT so we never use it)
 
 // Function to check if the specified window by class name is the foreground window
-bool IsWindowInFocusByClassName(const char* MSFSclassName) {
-    HWND hwndTarget = FindWindowA(MSFSclassName, NULL); // Window title is NULL since we're using class name
+bool IsWindowInFocusByClassName(const wchar_t* MSFSclassName) {
+    HWND hwndTarget = FindWindowW(MSFSclassName, NULL); // Window title is NULL since we're using class name
     return GetForegroundWindow() == hwndTarget;
 }
 
 // Function to bring the specified window by class name to the foreground if it's not already
 bool BringWindowToForegroundByClassName(const wchar_t* MSFSclassName) {
-    HWND hwndTarget = FindWindowW(NULL, MSFSclassName); // Use FindWindowW for wide characters, class name is now the second parameter
+    HWND hwndTarget = FindWindowW(MSFSclassName, NULL); // Use FindWindowW for wide characters, class name is the FIRST parameter
     if (hwndTarget == NULL) {
         // Window not found
         return false;
@@ -148,14 +149,15 @@ UINT ServerKeyPressDOWN(UINT KeyCode) {
     // We only want to send the key press if the MSFS window is in focus, if not, we bring it to focus
     BringWindowToForegroundByClassName(target_window.c_str());
 
-    /*
-
-    // Log the KEY_DOWN on the server side
-    std::wstringstream logStream;
-    logStream << L"Key pressed: " << KeyCode;
-    Logger::GetInstance()->log(logStream.str());
-
-    */
+    // Log the key press
+    if (DEBUG) {
+        // Log the KEY_DOWN on the server side. This is useful for debugging and seeing what keys are being pressed and what time specifically. Also
+        // useful for markikng events in the log file, say you run process explorer to capture events to a csv file with timestamps, you can later compare
+        // the timestamps in the log file to the events in the csv file to see what was happening at that time. Like investigating stutters.
+        std::wstringstream logStream;
+        logStream << L"Key pressed: " << KeyCode;
+        Logger::GetInstance()->log(logStream.str());
+    }
 
     if (USE_SCAN_CODE) {
         SendDOWNKeyWithScanCode(KeyCode);
