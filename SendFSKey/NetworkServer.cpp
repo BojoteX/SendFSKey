@@ -226,7 +226,7 @@ void shutdownServer() {
     WSACleanup();
 
     // Allow time for the server to shut down
-    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for 2 second so the server can shut down
+    // std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for 2 second so the server can shut down
 }
 
 bool sendData(SOCKET clientSocket, const char* data, int dataSize) {

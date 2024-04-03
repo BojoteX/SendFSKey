@@ -207,14 +207,10 @@ void ToggleConsoleVisibility(const std::wstring& title) {
 void RestartApplication() {
     // Ensure all cleanup is done before restarting, including releasing the mutex
     if (mutexHandle != NULL) {
-        ReleaseMutex(mutexHandle);
-        CloseHandle(mutexHandle);
-        mutexHandle = NULL; // Ensure the handle is marked as released.
-
         // Cleanup operations
         if (isClientMode) {
-            closeClientConnection(); // For client
             wprintf(L"Closing client connection\n");
+            closeClientConnection(); // For client
         }
         else {
             // For server mode
@@ -223,6 +219,10 @@ void RestartApplication() {
         }
         wprintf(L"Winsock cleanup and exiting program\n");
         cleanupWinsock();
+
+        ReleaseMutex(mutexHandle);
+        CloseHandle(mutexHandle);
+        mutexHandle = NULL; // Ensure the handle is marked as released.
     }
 
     wchar_t szPath[MAX_PATH];
@@ -238,7 +238,7 @@ void RestartApplication() {
             DWORD error = GetLastError();
             MessageBox(NULL, L"Failed to restart the application.", L"Error", MB_ICONERROR | MB_OK);
             // Re-acquire the mutex for the current (failing) instance since restart didn't happen
-            mutexHandle = CreateMutex(NULL, FALSE, L"Global\\MyUniqueAppNameMutex");
+            mutexHandle = CreateMutex(NULL, FALSE, L"SendFSKeyMutex");
             return;
         }
 
@@ -248,6 +248,26 @@ void RestartApplication() {
     else {
         MessageBox(NULL, L"Failed to obtain application path.", L"Error", MB_ICONERROR | MB_OK);
     }
+}
+
+bool isAlreadyRunning() {
+    // Check if the application is already running
+    mutexHandle = CreateMutex(NULL, TRUE, L"SendFSKeyMutex");
+    if (mutexHandle == NULL) {
+        // Handle error condition if necessary
+        return false; // Or true, depending on how you want to handle mutex creation failure
+    }
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(mutexHandle); // Close the handle if we're not the first instance
+        return true;
+    }
+
+    // No need to close the mutex handle here if this is the first instance.
+    // The handle will be automatically closed when the application exits.
+    // You can store hMutex globally if you want to explicitly release it on application exit,
+    // but it's not strictly necessary.
+    return false;
 }
 
 bool ConfirmResetAndRestart() {
@@ -540,26 +560,6 @@ void monitorParentProcess() {
         // Handle the error or case when there is no parent process to monitor
         wprintf(L"No parent process detected.\n");
     }
-}
-
-bool isAlreadyRunning() {
-    // Check if the application is already running
-    HANDLE hMutex = CreateMutex(NULL, TRUE, L"SendFSKeyMutex");
-    if (hMutex == NULL) {
-        // Handle error condition if necessary
-        return false; // Or true, depending on how you want to handle mutex creation failure
-    }
-
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        CloseHandle(hMutex); // Close the handle if we're not the first instance
-        return true;
-    }
-
-    // No need to close the mutex handle here if this is the first instance.
-    // The handle will be automatically closed when the application exits.
-    // You can store hMutex globally if you want to explicitly release it on application exit,
-    // but it's not strictly necessary.
-    return false;
 }
 
 void MinimizeToTray(HWND hWnd) {
